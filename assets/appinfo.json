@@ -1,0 +1,14 @@
+{
+    "id": "org.webosbrew.odysee",
+    "version": "1.0.0",
+    "vendor": "Saulimedes",
+    "type": "web",
+    "main": "index.html",
+    "title": "CCCBib",
+    "iconColor": "#DE0050",
+    "appDescription": "Odysee Unofficial",
+    "icon": "icon80.png",
+    "splashBackground": "splash.png",
+    "largeIcon": "icon130.png",
+    "disableBackHistoryAPI": true
+}
