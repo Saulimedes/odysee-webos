@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Odysee</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
+
+    <!-- Preconnect to API domains for faster initial requests -->
+    <link rel="preconnect" href="https://api.lbry.tv" crossorigin />
+    <link rel="preconnect" href="https://api.lbry.com" crossorigin />
+    <link rel="preconnect" href="https://api.odysee.com" crossorigin />
+    <link rel="preconnect" href="https://lighthouse.lbry.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.lbryplayer.xyz" crossorigin />
+    <link rel="preconnect" href="https://thumbnails.lbry.com" crossorigin />
+    <link rel="preconnect" href="https://odysee.com" crossorigin />
+
+    <!-- DNS prefetch as fallback for older browsers -->
+    <link rel="dns-prefetch" href="https://api.lbry.tv" />
+    <link rel="dns-prefetch" href="https://api.lbry.com" />
+    <link rel="dns-prefetch" href="https://thumbnails.lbry.com" />
+    <link rel="dns-prefetch" href="https://cdn.lbryplayer.xyz" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="bundle.js"></script>
+  </body>
+</html>

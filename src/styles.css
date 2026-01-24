@@ -1,0 +1,984 @@
+/* Base styles for TV - scaled up 30% for TV viewing distance */
+:root {
+  --odysee-pink: #de0050;
+  --odysee-dark: #000000;
+  --odysee-darker: #000000;
+  --sidebar-width-collapsed: 90px;
+  --sidebar-width-dynamic: 320px; /* Default, updated by JS based on content */
+  --slide-width: 440px;
+
+  /* Font sizes scaled for TV viewing distance (+30%) */
+  --font-size-xs: 1.45rem;
+  --font-size-sm: 1.65rem;
+  --font-size-md: 1.85rem;
+  --font-size-lg: 2.1rem;
+  --font-size-xl: 2.5rem;
+}
+
+/* Larger screens (4K) */
+@media (min-width: 2560px) {
+  :root {
+    --font-size-xs: 1.9rem;
+    --font-size-sm: 2.15rem;
+    --font-size-md: 2.4rem;
+    --font-size-lg: 2.75rem;
+    --font-size-xl: 3.25rem;
+    --slide-width: 550px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  /* Disable all transitions globally for TV performance */
+  transition: none !important;
+  -webkit-transition: none !important;
+  animation: none !important;
+  -webkit-animation: none !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0s !important;
+  -webkit-transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  -webkit-animation-duration: 0s !important;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #000000 !important;
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  /* Performance optimizations for TV */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
+  /* GPU acceleration for smoother scrolling */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+/* Minimal input styling - keep appearance for webOS keyboard detection */
+input:focus, textarea:focus {
+  outline: none !important;
+}
+
+#app {
+  height: 100vh;
+  width: 100vw;
+  background-color: #000000 !important;
+}
+
+/* Force pitch black background on all Mantine elements */
+.mantine-Stack-root,
+.mantine-Box-root,
+.mantine-ScrollArea-root,
+.mantine-AppShell-root,
+.mantine-AppShell-main,
+[class^="mantine-"],
+[class*=" mantine-"] {
+  background-color: transparent !important;
+}
+
+/* AppShell padding states - using CSS classes for faster switching */
+.app-shell .mantine-AppShell-main {
+  /* CSS containment for performance - sidebar changes don't trigger content reflow */
+  contain: layout style;
+  will-change: padding-left;
+}
+
+.app-shell--sidebar-collapsed .mantine-AppShell-main {
+  padding-left: 90px !important;
+}
+
+.app-shell--sidebar-expanded .mantine-AppShell-main {
+  padding-left: var(--sidebar-width-dynamic) !important;
+}
+
+.app-shell--player .mantine-AppShell-main {
+  padding-left: 0 !important;
+}
+
+.home-container,
+.category-container,
+.search-container,
+.watchlist-container,
+.settings-container,
+.login-container,
+.library-container,
+.following-container {
+  background-color: #000000 !important;
+}
+
+/* Loading state */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--odysee-pink);
+  font-size: var(--font-size-xl);
+}
+
+/* Sidebar styles - instant width changes, no transitions */
+.sidebar {
+  background-color: #000000 !important;
+  transition: none !important;
+  z-index: 100;
+  overflow: hidden;
+  /* CSS containment for performance - layout changes don't affect other elements */
+  contain: layout style;
+}
+
+/* Sidebar width states - CSS classes for instant switching */
+.sidebar--collapsed {
+  width: 90px !important;
+  min-width: 90px !important;
+  max-width: 90px !important;
+  overflow: hidden !important;
+}
+
+/* Hide labels and text when sidebar is collapsed */
+.sidebar--collapsed .sidebar-item-label,
+.sidebar--collapsed .sidebar-logo img[src*="odysee_text"],
+.sidebar--collapsed .sidebar-logo .mantine-Text-root,
+.sidebar--collapsed .sidebar-logo .mantine-Avatar-root ~ .mantine-Text-root {
+  display: none !important;
+}
+
+.sidebar--expanded {
+  width: var(--sidebar-width-dynamic) !important;
+  min-width: var(--sidebar-width-dynamic) !important;
+  max-width: var(--sidebar-width-dynamic) !important;
+}
+
+.sidebar--focused {
+  background-color: #000000 !important;
+}
+
+/* Force Mantine Navbar to be solid black with no transitions */
+.sidebar.mantine-Navbar-root,
+.mantine-Navbar-root {
+  background-color: #000000 !important;
+  background: #000000 !important;
+  transition: none !important;
+  -webkit-transition: none !important;
+}
+
+/* Disable all Mantine transitions for instant sidebar collapse/expand */
+.mantine-Navbar-root,
+.mantine-Navbar-root *,
+.mantine-AppShell-root,
+.mantine-AppShell-main,
+.mantine-AppShell-body {
+  transition: none !important;
+  -webkit-transition: none !important;
+  animation: none !important;
+  -webkit-animation: none !important;
+}
+
+/* Sidebar logo - always left-aligned */
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px 20px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+
+/* Sidebar item - always left-aligned */
+.sidebar-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px 20px;
+  border-radius: 8px;
+  transition: none;
+  min-height: 60px;
+  white-space: nowrap;
+}
+
+/* Selected item (not focused): white font, no background */
+.sidebar-item--selected {
+  background-color: transparent !important;
+}
+
+/* Focused item (navigating): pink font + pink background */
+.sidebar-item--focused {
+  background-color: rgba(222, 0, 80, 0.2) !important;
+}
+
+/* Icon in sidebar item */
+.sidebar-item-icon {
+  flex-shrink: 0;
+}
+
+/* Label in sidebar item (only shown when expanded) */
+.sidebar-item-label {
+  font-size: var(--font-size-lg);
+  margin-left: 16px;
+  white-space: nowrap;
+}
+
+/* Remove any borders from Navbar sections */
+.sidebar .mantine-Navbar-section,
+.sidebar [class^="mantine-"],
+.sidebar [class*=" mantine-"] {
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-left: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Hide pseudo-elements that might create lines, but not on Dividers */
+.sidebar .mantine-Navbar-section::before,
+.sidebar .mantine-Navbar-section::after,
+.sidebar .mantine-Stack-root::before,
+.sidebar .mantine-Stack-root::after {
+  display: none !important;
+  border: none !important;
+}
+
+/* Remove border from sidebar */
+.sidebar.mantine-Navbar-root,
+.sidebar--focused.mantine-Navbar-root,
+.mantine-Navbar-root {
+  border: none !important;
+  border-right: none !important;
+}
+
+/* Hide scrollbar but keep functionality */
+.sidebar [style*="overflow-y"]::-webkit-scrollbar,
+.sidebar .mantine-Navbar-section::-webkit-scrollbar {
+  width: 0;
+  display: none;
+}
+
+.sidebar [style*="overflow-y"],
+.sidebar .mantine-Navbar-section {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Home container */
+.home-container {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 26px;
+  padding-left: 6px;
+}
+
+.category-row {
+  margin-bottom: 26px;
+  overflow: visible;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.category-title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  padding-left: 13px;
+}
+
+/* Embla Carousel */
+.embla-wrapper {
+  overflow: visible;
+  position: relative;
+  padding: 6px 0;
+}
+
+.embla {
+  overflow: visible;
+}
+
+.embla__container {
+  display: flex;
+  padding-left: 13px;
+  padding-right: 52px;
+}
+
+.embla__slide {
+  flex: 0 0 var(--slide-width);
+  min-width: 0;
+  padding: 6px;
+  margin-right: 21px;
+}
+
+.embla__slide:last-child {
+  margin-right: 0;
+}
+
+/* Video card - keep grey background */
+.video-card,
+.video-card.mantine-Paper-root,
+.video-card.mantine-Card-root {
+  background-color: #1a1a1a !important;
+  border: 5px solid transparent !important;
+  border-radius: 10px !important;
+  /* Performance: contain layout/paint to this element */
+  contain: layout style paint;
+  /* Hint browser to optimize for border changes */
+  will-change: border-color;
+  transition: none;
+  cursor: pointer;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Selected card always shows pink border */
+.video-card.video-card--active,
+.video-card--active.mantine-Paper-root,
+.video-card--active.mantine-Card-root,
+.video-card--active {
+  border: 5px solid var(--odysee-pink) !important;
+  z-index: 10;
+}
+
+.video-card__thumbnail-container {
+  position: relative;
+  width: 100%;
+  /* Use padding-top hack instead of aspect-ratio for Chrome 68 compatibility */
+  padding-top: 56.25%; /* 16:9 aspect ratio */
+  overflow: hidden;
+  background-color: #222;
+  border-radius: 6px 6px 0 0;
+}
+
+.video-card__thumbnail,
+.video-card__placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.video-card__thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.video-card__placeholder {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-card__duration {
+  position: absolute;
+  bottom: 12px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.85) !important;
+  padding: 6px 12px !important;
+  border-radius: 5px;
+  font-size: var(--font-size-sm) !important;
+  font-weight: 500;
+  line-height: 1.2 !important;
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.video-card__info {
+  display: flex;
+  padding: 13px;
+  background-color: #1a1a1a;
+  flex: 1;
+}
+
+.video-card__avatar {
+  flex-shrink: 0;
+  margin-right: 13px;
+}
+
+.video-card__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.video-card__title {
+  font-size: 2.15rem; /* 30% larger than --font-size-sm (1.65rem) */
+  line-height: 1.3;
+  height: 2.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: #fff;
+}
+
+.video-card__channel {
+  font-size: var(--font-size-xs);
+  color: #aaa;
+}
+
+.video-card__meta {
+  display: flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  color: #888;
+  margin-top: 4px;
+}
+
+.video-card__meta > * {
+  margin-right: 8px;
+}
+
+.video-card__meta > *:last-child {
+  margin-right: 0;
+}
+
+/* Video grid */
+.video-grid,
+.search-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--slide-width), 1fr));
+  grid-gap: 26px;
+  padding: 20px;
+  overflow: visible;
+}
+
+@media (min-width: 2560px) {
+  .video-grid,
+  .search-results-grid {
+    grid-template-columns: repeat(auto-fill, minmax(var(--slide-width), 1fr));
+  }
+
+  .video-card__title {
+    font-size: 2.8rem; /* 30% larger than 4K --font-size-sm (2.15rem) */
+  }
+}
+
+/* Search */
+.search-container {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.search-input {
+  width: 100%;
+}
+
+.search-input input {
+  background-color: #222 !important;
+  border: 3px solid #444 !important;
+  color: white !important;
+  font-size: var(--font-size-lg) !important;
+  padding: 18px 24px 18px 60px !important;
+  height: auto !important;
+}
+
+.search-input--focused input {
+  border: 5px solid var(--odysee-pink) !important;
+  box-shadow: 0 0 0 3px rgba(222, 0, 80, 0.3) !important;
+}
+
+/* Search input wrapper for webOS */
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: #222;
+  border: 5px solid #444;
+  border-radius: 10px;
+  min-height: 80px;
+}
+
+.search-input-wrapper.search-input--focused {
+  border-color: var(--odysee-pink);
+}
+
+/* Remove ALL Mantine inner borders */
+.search-input-wrapper .mantine-TextInput-root,
+.search-input-wrapper .mantine-TextInput-wrapper,
+.search-input-wrapper .mantine-TextInput-input,
+.search-input-wrapper .mantine-Input-root,
+.search-input-wrapper .mantine-Input-wrapper,
+.search-input-wrapper .mantine-Input-input,
+.search-input-wrapper [class*="mantine-"] {
+  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  outline: none !important;
+}
+
+.search-input-native {
+  flex: 1;
+  background: transparent;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: white;
+  font-size: var(--font-size-lg);
+  padding: 18px 24px;
+  min-width: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* webOS keyboard support */
+  -webkit-user-modify: read-write-plaintext-only;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.search-input-native::placeholder {
+  color: #888;
+}
+
+.search-input-native:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.search-type-selector {
+  max-width: 390px;
+}
+
+.search-type-selector--focused {
+  outline: 5px solid var(--odysee-pink);
+  border-radius: 6px;
+}
+
+/* Category view */
+.category-container {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-left: 5px;
+}
+
+/* Watchlist */
+.watchlist-container {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+/* Settings */
+.settings-container {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.settings-item {
+  padding: 24px 28px;
+  border-radius: 12px;
+  border: 5px solid transparent;
+  transition: none;
+  background-color: transparent;
+}
+
+.settings-item--focused {
+  background-color: transparent;
+  border: 5px solid var(--odysee-pink);
+}
+
+/* Player */
+.player-fullscreen-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: black;
+  z-index: 1000;
+}
+
+.player-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.player-controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.7) 0%,
+    transparent 20%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.8) 100%
+  );
+  opacity: 0;
+  transition: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.player-controls--visible {
+  opacity: 1;
+}
+
+.player-top-bar {
+  padding: 26px 39px;
+}
+
+.player-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-play-button {
+  transition: none;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.player-play-button--focused,
+.player-play-button[style*="background-color: rgb(222, 0, 80)"] {
+  background-color: #de0050 !important;
+}
+
+.player-play-button:hover {
+  transform: scale(1.1);
+}
+
+.player-bottom-bar {
+  padding: 26px 39px 39px;
+}
+
+.player-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 21px;
+  padding: 0 13px;
+}
+
+.player-controls-left {
+  flex: 1;
+  justify-content: flex-start;
+}
+
+.player-controls-center {
+  flex: 0 0 auto;
+}
+
+.player-controls-right {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.player-progress-container {
+  display: flex;
+  align-items: center;
+}
+
+.player-progress-container > * {
+  margin-right: 20px;
+}
+
+.player-progress-container > *:last-child {
+  margin-right: 0;
+}
+
+.player-progress {
+  flex: 1;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.player-progress .mantine-Slider-thumb {
+  transition: none !important;
+  outline: none !important;
+  border: 3px solid white !important;
+  z-index: 2 !important;
+}
+
+.player-progress .mantine-Slider-thumb:focus,
+.player-progress .mantine-Slider-thumb:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.player-progress .mantine-Slider-bar {
+  transition: none !important;
+  background-color: #de0050 !important;
+  border-radius: 5px !important;
+}
+
+.player-progress .mantine-Slider-track {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.player-progress .mantine-Slider-root:focus,
+.player-progress .mantine-Slider-root:focus-visible,
+.player-progress:focus,
+.player-progress:focus-visible {
+  outline: none !important;
+  border: none !important;
+}
+
+.player-time {
+  min-width: 78px;
+  text-align: center;
+  font-size: var(--font-size-md);
+}
+
+.player-button {
+  transition: none;
+  outline: none !important;
+  border: none !important;
+}
+
+.player-button:focus,
+.player-button:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.player-button--focused {
+  background-color: #de0050 !important;
+  border-radius: 50% !important;
+  outline: none !important;
+  border: none !important;
+}
+
+.player-button:hover {
+  transform: scale(1.1);
+}
+
+.player-channel-button {
+  transition: none;
+}
+
+.player-channel-button.player-button--focused {
+  background-color: #de0050 !important;
+}
+
+/* Remove all focus outlines/borders from player controls */
+.player-controls button,
+.player-controls .mantine-ActionIcon-root {
+  outline: none !important;
+  border: none !important;
+}
+
+.player-controls button:focus,
+.player-controls button:focus-visible,
+.player-controls .mantine-ActionIcon-root:focus,
+.player-controls .mantine-ActionIcon-root:focus-visible {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.player-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 26px 52px;
+  border-radius: 10px;
+  z-index: 10;
+  font-size: var(--font-size-lg);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Login */
+.login-container {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.login-paper {
+  border: 1px solid #333;
+}
+
+.login-input--focused input {
+  border: 5px solid var(--odysee-pink) !important;
+  box-shadow: 0 0 0 3px rgba(222, 0, 80, 0.3) !important;
+}
+
+/* Native login input for webOS */
+.login-input-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: #222;
+  border: 5px solid #444;
+  border-radius: 10px;
+  width: 100%;
+  min-height: 80px;
+}
+
+/* Remove ALL Mantine inner borders */
+.login-input-wrapper .mantine-TextInput-root,
+.login-input-wrapper .mantine-TextInput-wrapper,
+.login-input-wrapper .mantine-TextInput-input,
+.login-input-wrapper .mantine-Input-root,
+.login-input-wrapper .mantine-Input-wrapper,
+.login-input-wrapper .mantine-Input-input,
+.login-input-wrapper [class*="mantine-"] {
+  border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  outline: none !important;
+}
+
+.login-input-wrapper.login-input--focused {
+  border-color: var(--odysee-pink);
+}
+
+.login-input-native {
+  flex: 1;
+  background: transparent;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: white;
+  font-size: var(--font-size-lg);
+  padding: 18px 24px;
+  min-width: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* webOS keyboard support */
+  -webkit-user-modify: read-write-plaintext-only;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.login-input-native::placeholder {
+  color: #888;
+}
+
+.login-input-native:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.login-input-native:disabled {
+  opacity: 0.5;
+}
+
+.login-button--focused {
+  transform: scale(1.02);
+  box-shadow: 0 4px 15px rgba(222, 0, 80, 0.4);
+  outline: 5px solid var(--odysee-pink);
+}
+
+/* Following view */
+.following-sidebar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.following-sidebar::-webkit-scrollbar {
+  display: none;
+}
+
+.following-video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--slide-width), 1fr));
+  grid-gap: 26px;
+  padding: 20px;
+  overflow: visible;
+}
+
+@media (min-width: 2560px) {
+  .following-video-grid {
+    grid-template-columns: repeat(auto-fill, minmax(var(--slide-width), 1fr));
+  }
+}
+
+.following-channel-item:hover {
+  background-color: rgba(222, 0, 80, 0.2) !important;
+}
+
+.following-channel-item--selected {
+  background-color: rgba(222, 0, 80, 0.2) !important;
+}
+
+/* Library styles */
+.library-video-row {
+  display: flex;
+  gap: 26px;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: 10px;
+  padding-top: 5px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.library-video-row > div {
+  flex: 0 0 var(--slide-width);
+  width: var(--slide-width);
+}
+
+.library-card {
+  transition: none;
+}
+
+.library-card--active {
+  z-index: 10;
+}
+
+.library-cards-row::-webkit-scrollbar,
+.library-video-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ensure card grids have overflow visible for scaling */
+.mantine-SimpleGrid-root {
+  overflow: visible !important;
+  padding: 13px;
+  margin: -13px;
+}
+
+/* Focus outline removal for mouse users, keep for keyboard */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--odysee-pink);
+  outline-offset: 2px;
+}

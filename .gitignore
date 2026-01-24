@@ -1,2 +1,17 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+*.ipk
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Nix/devenv
+.direnv/
+.devenv/
+.devenv.flake.nix
