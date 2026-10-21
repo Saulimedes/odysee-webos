@@ -213,7 +213,8 @@ export function Player({ video, startAt, onClose, onPlayNext, onOpenChannel }: P
       case KEY.LEFT:
       case KEY.RIGHT: {
         const direction = event.keyCode === KEY.LEFT ? -1 : 1;
-        if (!visible || row === 'progress') seek(direction);
+        if (!visible) { setRow('progress'); seek(direction); }
+        else if (row === 'progress') seek(direction);
         else if (row === 'buttons') {
           const next = CONTROLS.indexOf(focused) + direction;
           if (next >= 0 && next < CONTROLS.length) setFocused(CONTROLS[next]);

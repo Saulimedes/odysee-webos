@@ -19,7 +19,7 @@ export function ListPage({ section }: { section: SectionId }) {
     <VideoGrid
       stateKey={`list:${section}`}
       title={config.title}
-      videos={videos[section]}
+      videos={videos[section] ?? []}
       emptyTitle={config.emptyTitle}
       emptyHint={config.emptyHint}
       emptyIcon={config.icon}

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { peek, store } from '@/shared/api';
 import type { Video } from '@/entities/video';
 
-interface FeedState { videos: Video[]; page: number; hasMore: boolean; t: number }
+interface FeedState { videos: Video[]; page: number; hasMore: boolean }
 
 const FRESH_MS = 5 * 60 * 1000;
-const memory = new Map<string, FeedState>();
 
 function restore(key: string) {
-  const saved = memory.get(key);
-  return saved && Date.now() - saved.t < FRESH_MS ? saved : null;
+  const hit = peek<FeedState>(`feed:${key}`, { ttl: FRESH_MS });
+  return hit && !hit.stale ? hit.value : null;
 }
 
 export function usePagedFeed(key: string, fetchPage: (page: number) => Promise<Video[]>, pageSize: number) {
@@ -22,7 +22,7 @@ export function usePagedFeed(key: string, fetchPage: (page: number) => Promise<V
   stateRef.current = state;
 
   const commit = useCallback((next: FeedState) => {
-    memory.set(key, next);
+    store(`feed:${key}`, next);
     stateRef.current = next;
     setState(next);
   }, [key]);
@@ -36,7 +36,7 @@ export function usePagedFeed(key: string, fetchPage: (page: number) => Promise<V
       const known = new Set((page === 1 ? [] : stateRef.current?.videos || []).map((video) => video.id));
       const fresh = incoming.filter((video) => !known.has(video.id));
       const videos = page === 1 ? fresh : [...(stateRef.current?.videos || []), ...fresh];
-      commit({ videos, page, hasMore: incoming.length >= pageSize, t: Date.now() });
+      commit({ videos, page, hasMore: incoming.length >= pageSize });
       setError(null);
     } catch (reason) {
       console.error('Feed failed', key, reason);

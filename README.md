@@ -1,93 +1,83 @@
-# Odysee for WebOS
+# Odysee for webOS
 
-Unofficial Odysee/LBRY client for LG WebOS TVs.
+Unofficial Odysee client for LG webOS TVs.
 
 ## Features
 
-- Browse trending videos on Odysee
-- Category browsing: Cheese, Big Hits, Gaming, Lab, Tech, News, Finance, Universe
-- Search videos and channels
-- Watchlist to save videos for later
-- Full video playback with TV remote controls
+- Home with one row per Odysee category and a Following row when you are signed in.
+- Continue Watching: resumes where you stopped and shows your progress on every card.
+- Discover, Featured, Categories, channel pages and search for videos and channels.
+- Sign in with a magic link or a password. Following, Playlists, Watch Later and Favorites sync with your account.
+- Library with Continue Watching, Watch Later, Favorites and Watch History.
+- App customization: themes, accent colors, 14 fonts, corner style, text size and card size.
+- Made for the TV remote.
+
+## Remote control
+
+| Button | Action |
+| --- | --- |
+| Arrow keys | Navigate |
+| OK | Select |
+| Back | Go back, closes the sidebar or the player controls first |
+| Left on the first item | Open the sidebar |
+| Left and Right in the player | Seek 10 seconds, steps grow while you keep pressing |
+| Up and Down in the player | Move between the top bar, the timeline and the buttons |
+| Play, Pause, Stop, Rewind and Fast Forward | Work in the player |
+
+## Customization
+
+Open Settings. Theme, accent color and font apply while you move through the list in the picker and only stick once you confirm. The fonts ship with the app and load when you pick them.
 
 ## Development
 
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- WebOS SDK (ares-cli) for deployment
-
-### Setup
+Node 24 is used for everything except packaging (see `.nvmrc`).
 
 ```bash
-npm install
+npm ci
+npm start          # dev server on http://localhost:3333
+npm run verify     # typecheck, FSD lint, unused code, tests with coverage, build and Chrome 68
 ```
 
-### Run Development Server
+### Deploy to the TV
 
-```bash
-npm start
-```
-
-Opens at http://localhost:3333
-
-### Build for Production
+1. Enable Developer Mode on the TV and add it with `ares-setup-device`.
+2. Run:
 
 ```bash
 npm run build
+npm run package    # writes org.webosbrew.odysee_<version>_all.ipk
+npm run deploy
+npm run launch
 ```
 
-### Deploy to TV
+`npm run package` always runs `ares-package` on Node 20. On Node 22 and newer it writes every file with timestamp 0 and webOS then refuses the ipk with "ipk verified failed". The script checks the result and fails with a message if that happens.
 
-1. Enable Developer Mode on your LG TV
-2. Set up device with ares-cli:
-   ```bash
-   ares-setup-device
-   ```
-3. Package and deploy:
-   ```bash
-   npm run build
-   npm run package
-   npm run deploy
-   npm run launch
-   ```
+## Project structure
 
-## Remote Control
-
-| Button | Action |
-|--------|--------|
-| Arrow Keys | Navigate |
-| Enter/OK | Select |
-| Back | Go back / Exit player |
-| Left/Right (in player) | Seek 10 seconds |
-| Up/Down (in player) | Volume |
-
-## Project Structure
+The code follows [Feature-Sliced Design](https://feature-sliced.design) (checked by `npm run lint:fsd`).
 
 ```
 src/
-├── index.jsx          # App entry point
-├── App.jsx            # Router
-├── constants.js       # Config and keycodes
-├── styles.css         # TV-optimized styles
-├── api/
-│   └── odysee.js      # LBRY API client
-├── views/
-│   └── Main.jsx       # Main layout
-└── components/
-    ├── Sidebar.jsx    # Navigation menu
-    ├── Home.jsx       # Home view
-    ├── Search.jsx     # Search view
-    ├── Player.jsx     # Video player
-    └── ...
+├── app/        Entry, routing, account start up and global styles
+├── pages/      Home, feed, categories, following, playlists, library, search, settings, login
+├── widgets/    Sidebar, player, video rows, item grid, master detail
+├── features/   Collections, continue watching, following, browse feeds
+├── entities/   Video, channel, category, session
+└── shared/     API cache and client, config and appearance, hooks, UI
 ```
+
+Performance notes:
+
+- Rows and grids draw only the cards near the screen.
+- Home starts from cached rows and loads the others as you scroll toward them.
+- Thumbnails come through the Odysee image resizer.
+- One global key handler replaces a listener per screen.
 
 ## Credits
 
-- Uses the [LBRY](https://lbry.com) / [Odysee](https://odysee.com) API
-- Based on patterns from [cccbib](https://github.com/nickersk/cccbib)
-- Built with React, Mantine, and Embla Carousel
+- Uses the [LBRY](https://lbry.com) and [Odysee](https://odysee.com) APIs.
+- Customization and tooling follow [cccbib](https://github.com/volkovmqx/cccbib).
+- Built with React and Tabler icons. Fonts are under the SIL Open Font License, see `src/app/styles/fonts`.
 
 ## License
 

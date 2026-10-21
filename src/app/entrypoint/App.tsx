@@ -48,6 +48,10 @@ export default function App() {
   }), [sidebarFocused, play, go]);
 
   useKeys((event) => {
+    if (event.keyCode === KEY.LEFT) {
+      setSidebarFocused(true);
+      return true;
+    }
     if (event.keyCode !== KEY.WEBOS_BACK && event.keyCode !== KEY.ESCAPE && event.keyCode !== KEY.BACKSPACE) return false;
     if (sidebarFocused) {
       setSidebarFocused(false);

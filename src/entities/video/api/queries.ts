@@ -51,7 +51,7 @@ export function buildParams(feed: FeedQuery) {
   return params;
 }
 
-const cacheKey = (feed: FeedQuery) => `claims:${hash(JSON.stringify(buildParams(feed)))}`;
+const cacheKey = (feed: FeedQuery) => `claims:${hash(JSON.stringify([feed.channelIds, feed.claimIds, feed.order, feed.days, feed.page, feed.pageSize, getSetting('nsfw')]))}`;
 
 export function peekClaims(feed: FeedQuery): { videos: Video[]; stale: boolean } | undefined {
   const hit = peek<Video[]>(cacheKey(feed), { ttl: TTL, persist: true });

@@ -2,6 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 
+HTMLElement.prototype.scrollIntoView = () => {};
+
 beforeEach(() => {
   localStorage.clear();
   vi.stubGlobal('APP_VERSION', 'test');

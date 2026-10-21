@@ -37,17 +37,21 @@ export function parseHomepage(response: ContentResponse): Homepage {
 }
 
 const homepage = createStore<Homepage | null>(peek<Homepage>(KEY, OPTIONS)?.value ?? null);
+const failed = createStore(false);
 
 export const useHomepage = homepage.use;
+export const useHomepageFailed = failed.use;
 
 export async function refreshHomepage(force = false): Promise<Homepage | null> {
   if (force) invalidate(KEY);
   try {
     const next = await query(KEY, async () => parseHomepage(await getJson<ContentResponse>(CONTENT_API_URL)), OPTIONS);
     homepage.set(next);
+    failed.set(false);
     return next;
   } catch (error) {
     console.error('Failed to load homepage categories', error);
+    failed.set(true);
     return homepage.get();
   }
 }

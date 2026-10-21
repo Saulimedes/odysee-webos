@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { peekClaims, queryClaims, type FeedQuery, type Video } from '@/entities/video';
 import { categoryFeed } from '@/features/browse-feeds';
-import { useHomepage, type Category } from '@/entities/category';
+import { useHomepage, useHomepageFailed, type Category } from '@/entities/category';
 import { useSession } from '@/entities/session';
 import { getFollowingVideos } from '@/features/following';
 import { progressPercent, usePlaybackHistory } from '@/features/playback-history';
@@ -33,6 +33,7 @@ function cached(descriptor: Descriptor): RowState | null {
 
 export function useHomeRows() {
   const homepage = useHomepage();
+  const failed = useHomepageFailed();
   const { user } = useSession();
   const history = usePlaybackHistory();
   const loggedIn = Boolean(user?.primary_email);
@@ -106,6 +107,10 @@ export function useHomeRows() {
     });
   }, [load]);
 
+  useEffect(() => {
+    if (descriptors.length > 0) ensure(descriptors[0].id);
+  }, [descriptors, ensure]);
+
   const loadMore = useCallback((rowId: string) => {
     const descriptor = descriptorsRef.current.find((candidate) => candidate.id === rowId);
     const state = dataRef.current[rowId];
@@ -133,5 +138,7 @@ export function useHomeRows() {
     return list;
   }, [descriptors, data, history]);
 
-  return { rows, ensure, loadMore, ready: homepage !== null };
+  const hasVideos = rows.some((row) => row.videos.length > 0);
+  const loading = !hasVideos && ((homepage === null && !failed) || rows.some((row) => row.status === 'idle' || row.status === 'loading'));
+  return { rows, ensure, loadMore, hasVideos, loading, failed: failed && homepage === null };
 }

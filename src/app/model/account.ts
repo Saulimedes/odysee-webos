@@ -15,6 +15,7 @@ export function bootSession() {
 
 export async function handleLogin() {
   invalidate('claims:');
+  invalidate('feed:');
   await Promise.all([refreshHomepage(true), syncAccount()]);
 }
 
@@ -22,4 +23,5 @@ export async function handleLogout() {
   await signOut();
   clearCollections(['watchLater', 'favorites']);
   invalidate('claims:');
+  invalidate('feed:');
 }

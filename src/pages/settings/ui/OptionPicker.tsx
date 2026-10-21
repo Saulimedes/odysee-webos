@@ -51,7 +51,7 @@ export function OptionPicker({ title, options, value, variant, onPreview, onClos
             <div
               className={`pickerItem${at === index ? ' pickerItem--active' : ''}`}
               style={variant === 'font' && option.family ? { fontFamily: `'${option.family}', sans-serif` } : undefined}
-              onClick={() => { setIndex(at); onClose(true); }}
+              onClick={() => { setIndex(at); onPreview(option.code); onClose(true); }}
             >
               {variant === 'swatch' && <i className="swatch" style={{ background: String(option.code) }} />}
               {option.name}

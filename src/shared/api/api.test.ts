@@ -1,0 +1,131 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { flush, mockFetch, rpcResult } from '../../../tests/helpers';
+import { createLimiter } from './limiter';
+
+beforeEach(() => { vi.resetModules(); });
+
+describe('cache', () => {
+  it('serves fresh values without refetching and dedupes in flight calls', async () => {
+    const { query } = await import('./cache');
+    const fetcher = vi.fn(async () => 'value');
+    const [a, b] = await Promise.all([query('k', fetcher, { ttl: 1000 }), query('k', fetcher, { ttl: 1000 })]);
+    expect(a).toBe('value');
+    expect(b).toBe('value');
+    await query('k', fetcher, { ttl: 1000 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches stale entries and reports staleness through peek', async () => {
+    const { query, peek } = await import('./cache');
+    vi.useFakeTimers();
+    await query('k', async () => 1, { ttl: 1000 });
+    expect(peek('k', { ttl: 1000 })).toEqual({ value: 1, stale: false });
+    vi.advanceTimersByTime(2000);
+    expect(peek('k', { ttl: 1000 })).toEqual({ value: 1, stale: true });
+    expect(await query('k', async () => 2, { ttl: 1000 })).toBe(2);
+  });
+
+  it('does not cache rejected calls', async () => {
+    const { query } = await import('./cache');
+    await expect(query('k', async () => { throw new Error('nope'); }, { ttl: 1000 })).rejects.toThrow('nope');
+    expect(await query('k', async () => 'ok', { ttl: 1000 })).toBe('ok');
+  });
+
+  it('persists entries to storage and restores them in a new session', async () => {
+    const first = await import('./cache');
+    await first.query('p', async () => ({ a: 1 }), { ttl: 1000, persist: true });
+    expect(localStorage.getItem('cache:p')).toContain('"a":1');
+    vi.resetModules();
+    const second = await import('./cache');
+    expect(second.peek('p', { ttl: 1000, persist: true })?.value).toEqual({ a: 1 });
+    expect(second.peek('p', { ttl: 1000 })?.value).toEqual({ a: 1 });
+  });
+
+  it('ignores corrupt persisted entries and skips oversized ones', async () => {
+    localStorage.setItem('cache:bad', '{"nope":1}');
+    const { peek, store } = await import('./cache');
+    expect(peek('bad', { ttl: 1, persist: true })).toBeUndefined();
+    store('big', 'x'.repeat(300000), true);
+    expect(localStorage.getItem('cache:big')).toBeNull();
+  });
+
+  it('evicts the oldest entries beyond the limit', async () => {
+    const { store, peek } = await import('./cache');
+    for (let index = 0; index < 170; index++) store(`k${index}`, index);
+    expect(peek('k0', { ttl: 1000 })).toBeUndefined();
+    expect(peek('k169', { ttl: 1000 })?.value).toBe(169);
+  });
+
+  it('invalidates by prefix in memory and storage', async () => {
+    const { store, invalidate, peek } = await import('./cache');
+    store('a:1', 1, true);
+    store('b:1', 2, true);
+    invalidate('a:');
+    expect(peek('a:1', { ttl: 1000, persist: true })).toBeUndefined();
+    expect(peek('b:1', { ttl: 1000 })?.value).toBe(2);
+    invalidate();
+    expect(peek('b:1', { ttl: 1000, persist: true })).toBeUndefined();
+  });
+});
+
+describe('limiter', () => {
+  it('runs at most the limit at once and prefers higher priority', async () => {
+    const run = createLimiter(1);
+    const order: string[] = [];
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const first = run(async () => { order.push('first'); await gate; });
+    const low = run(async () => { order.push('low'); }, 0);
+    const high = run(async () => { order.push('high'); }, 5);
+    await flush();
+    expect(order).toEqual(['first']);
+    release();
+    await Promise.all([first, low, high]);
+    expect(order).toEqual(['first', 'high', 'low']);
+  });
+
+  it('propagates errors and keeps going', async () => {
+    const run = createLimiter(1);
+    await expect(run(async () => { throw new Error('x'); })).rejects.toThrow('x');
+    expect(await run(async () => 'ok')).toBe('ok');
+  });
+});
+
+describe('http', () => {
+  it('parses JSON and throws on failures', async () => {
+    const { getJson } = await import('./http');
+    mockFetch(() => ({ a: 1 }));
+    expect(await getJson('https://x')).toEqual({ a: 1 });
+    mockFetch(() => new Response('{}', { status: 500 }));
+    await expect(getJson('https://x')).rejects.toThrow('500');
+  });
+
+  it('posts forms and returns the status', async () => {
+    const { postForm } = await import('./http');
+    const spy = mockFetch(() => new Response('{"ok":true}', { status: 409 }));
+    const result = await postForm('https://x', { a: '1' });
+    expect(result).toEqual({ ok: false, status: 409, body: { ok: true } });
+    expect(String((spy.mock.calls[0][1] as RequestInit).body)).toBe('a=1');
+  });
+});
+
+describe('lbry rpc', () => {
+  it('sends JSON-RPC calls and returns the result', async () => {
+    const { lbryRpc } = await import('./lbry');
+    const spy = mockFetch(() => rpcResult({ items: [] }));
+    expect(await lbryRpc('claim_search', { page: 1 })).toEqual({ items: [] });
+    expect(spy.mock.calls[0][0]).toContain('?m=claim_search');
+    expect(JSON.parse(String((spy.mock.calls[0][1] as RequestInit).body)).params).toEqual({ page: 1 });
+  });
+
+  it('throws API errors and sends the token on authenticated calls', async () => {
+    const { lbryRpc, lbryRpcAuthenticated } = await import('./lbry');
+    mockFetch(() => ({ error: { message: 'boom' } }));
+    await expect(lbryRpc('x', {})).rejects.toThrow('boom');
+    mockFetch(() => ({ error: {} }));
+    await expect(lbryRpc('x', {})).rejects.toThrow('LBRY API error');
+    const spy = mockFetch(() => rpcResult(1));
+    await lbryRpcAuthenticated('preference_get', {}, 'tok');
+    expect((spy.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'X-Lbry-Auth-Token': 'tok' });
+  });
+});

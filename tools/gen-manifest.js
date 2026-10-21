@@ -1,47 +1,23 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
+const fs = require('fs');
 
-const distDir = path.join(__dirname, '..', 'dist');
-const outputFile = process.argv[2] || 'manifest.json';
+const outfile = process.argv[2];
+const appinfo = JSON.parse(fs.readFileSync('assets/appinfo.json'));
+const ipkfile = `${appinfo.id}_${appinfo.version}_all.ipk`;
+const ipkhash = crypto.createHash('sha256').update(fs.readFileSync(ipkfile)).digest('hex');
 
-function hashFile(filePath) {
-  const content = fs.readFileSync(filePath);
-  return crypto.createHash('sha256').update(content).digest('hex');
-}
-
-function walkDir(dir, baseDir = dir) {
-  const files = [];
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkDir(fullPath, baseDir));
-    } else {
-      files.push({
-        path: path.relative(baseDir, fullPath),
-        hash: hashFile(fullPath),
-        size: fs.statSync(fullPath).size,
-      });
-    }
-  }
-
-  return files;
-}
-
-const appInfo = require(path.join(distDir, 'appinfo.json'));
-const files = walkDir(distDir);
-
-const manifest = {
-  id: appInfo.id,
-  version: appInfo.version,
-  title: appInfo.title,
-  description: appInfo.appDescription,
-  files,
-  generated: new Date().toISOString(),
-};
-
-fs.writeFileSync(outputFile, JSON.stringify(manifest, null, 2));
-console.log(`Manifest generated: ${outputFile}`);
+fs.writeFileSync(
+  outfile,
+  JSON.stringify({
+    id: appinfo.id,
+    version: appinfo.version,
+    type: appinfo.type,
+    title: appinfo.title,
+    appDescription: appinfo.appDescription,
+    iconUri: 'https://raw.githubusercontent.com/Saulimedes/odysee-webos/main/assets/icon130.png',
+    sourceUrl: 'https://github.com/Saulimedes/odysee-webos',
+    ipkUrl: ipkfile,
+    ipkHash: { sha256: ipkhash },
+  })
+);
