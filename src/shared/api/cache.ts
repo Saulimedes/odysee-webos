@@ -67,3 +67,14 @@ export function invalidate(prefix = '') {
     }
   } catch { /* storage unavailable */ }
 }
+
+export function pruneCache(maxAgeMs: number) {
+  try {
+    for (let index = localStorage.length - 1; index >= 0; index--) {
+      const name = localStorage.key(index);
+      if (!name || !name.startsWith(PERSIST_PREFIX)) continue;
+      const entry = readJson<Entry<unknown> | null>(name, null);
+      if (!entry || typeof entry.t !== 'number' || Date.now() - entry.t > maxAgeMs) removeKey(name);
+    }
+  } catch { /* storage unavailable */ }
+}

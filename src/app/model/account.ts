@@ -1,4 +1,4 @@
-import { invalidate } from '@/shared/api';
+import { invalidate, pruneCache } from '@/shared/api';
 import { isLoggedIn, loadProfile, restoreSession, signOut } from '@/entities/session';
 import { refreshHomepage } from '@/entities/category';
 import { clearCollections, syncCollections } from '@/features/collections';
@@ -7,7 +7,10 @@ async function syncAccount() {
   await Promise.all([loadProfile(), syncCollections()]);
 }
 
+const CACHE_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
 export function bootSession() {
+  pruneCache(CACHE_MAX_AGE_MS);
   restoreSession();
   void refreshHomepage();
   if (isLoggedIn()) void syncAccount();

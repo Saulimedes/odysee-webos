@@ -56,6 +56,21 @@ describe('cache', () => {
     expect(peek('k169', { ttl: 1000 })?.value).toBe(169);
   });
 
+  it('prunes old and unreadable persisted entries', async () => {
+    const { store, pruneCache } = await import('./cache');
+    store('fresh', 1, true);
+    localStorage.setItem('cache:old', JSON.stringify({ v: 1, t: Date.now() - 10 * 86400000 }));
+    localStorage.setItem('cache:broken', '{');
+    localStorage.setItem('keep', '1');
+    pruneCache(86400000);
+    expect(localStorage.getItem('cache:fresh')).not.toBeNull();
+    expect(localStorage.getItem('cache:old')).toBeNull();
+    expect(localStorage.getItem('cache:broken')).toBeNull();
+    expect(localStorage.getItem('keep')).toBe('1');
+    vi.spyOn(Storage.prototype, 'key').mockImplementation(() => { throw new Error('denied'); });
+    expect(() => pruneCache(1)).not.toThrow();
+  });
+
   it('invalidates by prefix in memory and storage', async () => {
     const { store, invalidate, peek } = await import('./cache');
     store('a:1', 1, true);
