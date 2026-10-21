@@ -10,7 +10,7 @@ import { clearPlaybackHistory } from '@/features/playback-history';
 import { OptionPicker } from './OptionPicker';
 import { SETTINGS_ROWS, type Option, type SettingsRow } from './rows';
 
-const ROW_HEIGHT = 124;
+const SECTION_HEIGHT = 40;
 const ROW_GAP = 12;
 
 const interactive = (row: SettingsRow) => row.kind !== 'about';
@@ -35,6 +35,7 @@ function Value({ row }: { row: Extract<SettingsRow, { kind: 'choice' | 'toggle' 
 export function SettingsPage({ onSignOut }: { onSignOut: () => void }) {
   const nav = useNav<unknown>();
   const { user } = useSession();
+  const [textScale] = useSetting('textScale');
   const rows = SETTINGS_ROWS.filter((row) => row.kind !== 'account' || user);
   const [stored, setIndex] = useRemembered('settings:index', 0);
   const index = Math.min(stored, rows.length - 1);
@@ -99,7 +100,7 @@ export function SettingsPage({ onSignOut }: { onSignOut: () => void }) {
         items={rows}
         columns={1}
         cellWidth={window.innerWidth - 96 - 96}
-        cellHeight={ROW_HEIGHT}
+        cellHeight={SECTION_HEIGHT + Math.round(60 + 24 * textScale)}
         gap={ROW_GAP}
         height={height}
         activeIndex={index}
