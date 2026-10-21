@@ -1,6 +1,6 @@
 {
   "id": "org.webosbrew.odysee",
-  "version": "1.0.68570411",
+  "version": "1.1.0",
   "vendor": "Saulimedes",
   "type": "web",
   "main": "index.html",

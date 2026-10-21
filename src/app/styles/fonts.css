@@ -1,0 +1,18 @@
+@font-face { font-family: 'Inter'; src: url('./fonts/Inter.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('./fonts/Poppins.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'OpenDyslexic'; src: url('./fonts/OpenDyslexic.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Space Grotesk'; src: url('./fonts/SpaceGrotesk.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Merriweather'; src: url('./fonts/Merriweather.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Courier Prime'; src: url('./fonts/CourierPrime.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Inconsolata'; src: url('./fonts/Inconsolata.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Silkscreen'; src: url('./fonts/Silkscreen.woff2') format('woff2'); font-display: swap; }
+@font-face { font-family: 'Andika'; src: url('./fonts/Andika-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Andika'; src: url('./fonts/Andika-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Comic Neue'; src: url('./fonts/ComicNeue-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Comic Neue'; src: url('./fonts/ComicNeue-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Lexend'; src: url('./fonts/Lexend-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Lexend'; src: url('./fonts/Lexend-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; src: url('./fonts/AtkinsonHyperlegibleNext-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Atkinson Hyperlegible Next'; src: url('./fonts/AtkinsonHyperlegibleNext-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'Open Sans'; src: url('./fonts/OpenSans-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Open Sans'; src: url('./fonts/OpenSans-Bold.woff2') format('woff2'); font-weight: 700; font-display: swap; }

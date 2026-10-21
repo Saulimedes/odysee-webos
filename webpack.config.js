@@ -5,64 +5,55 @@ const appInfo = require('./assets/appinfo.json');
 
 module.exports = {
   entry: {
-    app: [
-      'core-js/stable',
-      'regenerator-runtime/runtime',
-      './src/index.jsx'
-    ]
+    app: ['./src/index.tsx'],
   },
+  target: ['web', 'es2017'],
   devtool: false,
   module: {
     rules: [
       {
         test: /\.(ts|tsx|js|jsx|mjs)$/,
-        exclude: /node_modules/,
+        exclude: /core-js/,
         use: ['babel-loader'],
-      },
-      {
-        // Transpile modern syntax in node_modules for Chrome 68 compatibility
-        test: /\.(js|mjs)$/,
-        include: /node_modules/,
-        exclude: /node_modules[\\/](core-js|regenerator-runtime)/,
-        use: {
-          loader: 'babel-loader',
-          options: {
-            presets: [
-              ['@babel/preset-env', {
-                targets: { browsers: ['chrome >= 53'] },
-                modules: false,  // Don't transform modules - keeps ESM intact
-                useBuiltIns: false,  // Don't inject polyfills here
-              }]
-            ],
-            sourceType: 'unambiguous',  // Handle both ESM and CJS
-          }
-        }
       },
       {
         test: /\.css$/i,
         use: [
           'style-loader',
-          {
-            loader: 'css-loader',
-            options: {
-              importLoaders: 1
-            }
-          }
+          { loader: 'css-loader', options: { importLoaders: 1 } },
+          path.resolve(__dirname, 'tools/min-css-loader.js'),
         ],
+      },
+      {
+        test: /\.woff2$/i,
+        type: 'asset/resource',
+        generator: { filename: 'fonts/[name][ext]' },
       },
     ],
   },
   resolve: {
+    alias: { '@': path.resolve(__dirname, 'src') },
     extensions: ['.js', '.jsx', '.ts', '.tsx', '.mjs'],
-    modules: ['node_modules', path.resolve(__dirname, 'src')],
-    alias: {
-      'react': path.resolve(__dirname, 'node_modules/react'),
-      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
-    },
+    modules: [path.resolve(__dirname, 'src'), 'node_modules'],
   },
   output: {
     path: path.resolve(__dirname, './dist'),
-    filename: 'bundle.js',
+    filename: '[name].bundle.js',
+    chunkFilename: '[name].chunk.js',
+    clean: true,
+  },
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendor',
+          chunks: 'initial',
+          priority: 10,
+        },
+      },
+    },
   },
   plugins: [
     new webpack.DefinePlugin({
@@ -72,39 +63,18 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         { context: 'assets', from: '**/*' },
+        { context: 'src/app/styles/fonts', from: '*.{txt,md}', to: 'fonts' },
         { context: 'src', from: 'index.html' },
-        { context: 'src', from: 'sw.js' },
       ],
     }),
   ],
   devServer: {
     static: path.resolve(__dirname, './dist'),
     port: 3333,
-    proxy: {
-      '/lbry-api': {
-        target: 'https://api.lbry.tv',
-        pathRewrite: { '^/lbry-api': '' },
-        changeOrigin: true,
-        secure: true,
-      },
-      '/lighthouse': {
-        target: 'https://lighthouse.lbry.com',
-        pathRewrite: { '^/lighthouse': '' },
-        changeOrigin: true,
-        secure: true,
-      },
-      '/odysee-proxy': {
-        target: 'https://api.na-backend.odysee.com',
-        pathRewrite: { '^/odysee-proxy': '' },
-        changeOrigin: true,
-        secure: true,
-      },
-      '/lbry-api-com': {
-        target: 'https://api.lbry.com',
-        pathRewrite: { '^/lbry-api-com': '' },
-        changeOrigin: true,
-        secure: true,
-      },
-    },
+    proxy: [
+      { context: ['/lbry-api'], target: 'https://api.lbry.tv', pathRewrite: { '^/lbry-api': '' }, changeOrigin: true, secure: true },
+      { context: ['/odysee-proxy'], target: 'https://api.na-backend.odysee.com', pathRewrite: { '^/odysee-proxy': '' }, changeOrigin: true, secure: true },
+      { context: ['/lbry-api-com'], target: 'https://api.lbry.com', pathRewrite: { '^/lbry-api-com': '' }, changeOrigin: true, secure: true },
+    ],
   },
 };

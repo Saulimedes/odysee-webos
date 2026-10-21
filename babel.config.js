@@ -1,19 +1,13 @@
-const isProduction = process.env.NODE_ENV === 'production';
-
 module.exports = {
+  compact: false,
+  sourceType: 'unambiguous',
+  targets: { chrome: '68' },
   presets: [
-    ['@babel/preset-env', {
-      useBuiltIns: 'usage',
-      corejs: 3,
-      targets: {
-        browsers: ['chrome >= 53']
-      }
-    }],
-    ['@babel/preset-react', {
-      runtime: 'automatic'
-    }]
+    '@babel/preset-env',
+    '@babel/preset-typescript',
+    ['@babel/preset-react', { runtime: 'automatic', development: false }],
   ],
-  plugins: isProduction ? [
-    ['transform-remove-console', { exclude: ['error', 'warn'] }]
-  ] : []
+  plugins: [
+    ['babel-plugin-polyfill-corejs3', { method: 'usage-global', version: '3.50', proposals: false }],
+  ],
 };

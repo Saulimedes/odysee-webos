@@ -1,26 +1,66 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="black">
   <head>
+    <meta charset="utf-8" />
     <title>Odysee</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
-
-    <!-- Preconnect to API domains for faster initial requests -->
     <link rel="preconnect" href="https://api.lbry.tv" crossorigin />
-    <link rel="preconnect" href="https://api.lbry.com" crossorigin />
-    <link rel="preconnect" href="https://api.odysee.com" crossorigin />
-    <link rel="preconnect" href="https://lighthouse.lbry.com" crossorigin />
-    <link rel="preconnect" href="https://cdn.lbryplayer.xyz" crossorigin />
-    <link rel="preconnect" href="https://thumbnails.lbry.com" crossorigin />
+    <link rel="preconnect" href="https://thumbnails.odycdn.com" crossorigin />
     <link rel="preconnect" href="https://odysee.com" crossorigin />
-
-    <!-- DNS prefetch as fallback for older browsers -->
-    <link rel="dns-prefetch" href="https://api.lbry.tv" />
     <link rel="dns-prefetch" href="https://api.lbry.com" />
-    <link rel="dns-prefetch" href="https://thumbnails.lbry.com" />
     <link rel="dns-prefetch" href="https://cdn.lbryplayer.xyz" />
+    <script>
+      (function () {
+        try {
+          var cached = JSON.parse(localStorage.getItem('appearance_boot'));
+          if (!cached) return;
+          var root = document.documentElement;
+          for (var attr in cached.attrs) root.setAttribute(attr, cached.attrs[attr]);
+          for (var name in cached.vars) root.style.setProperty(name, cached.vars[name]);
+        } catch (e) {}
+      })();
+    </script>
+    <style>
+      :root { --bg: #000; --text: #fff; --accent: #de0050; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+      #boot { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2147483647; background: var(--bg); }
+      #boot img { position: absolute; top: 50%; left: 50%; width: 220px; margin: -50px 0 0 -110px; }
+      #boot pre { margin: 0; padding: 40px 60px; white-space: pre-wrap; word-break: break-word; font: 20px/1.5 monospace; color: var(--text); }
+    </style>
   </head>
   <body>
     <div id="app"></div>
-    <script src="bundle.js"></script>
+    <div id="boot"><img src="odysee_text.png" alt="Odysee" /></div>
+    <script>
+      (function () {
+        var ready = false;
+        var boot = document.getElementById('boot');
+        window.__odyseeReady = function () {
+          if (ready) return;
+          ready = true;
+          if (boot.parentNode) boot.parentNode.removeChild(boot);
+        };
+        function fail(message) {
+          if (ready || document.getElementById('app').firstChild) return;
+          boot.innerHTML = '<pre></pre>';
+          boot.firstChild.textContent = 'Odysee failed to start\n\n' + message + '\n\n' + navigator.userAgent;
+        }
+        window.onerror = function (message, source, line) { fail(message + '\n' + source + ':' + line); };
+        window.addEventListener('unhandledrejection', function (event) {
+          fail(String(event.reason && (event.reason.stack || event.reason.message || event.reason)));
+        });
+        function loadBundles() {
+          ['./vendor.bundle.js', './app.bundle.js'].forEach(function (src) {
+            var script = document.createElement('script');
+            script.async = false;
+            script.src = src;
+            script.onerror = function () { fail('Could not load ' + src); };
+            document.body.appendChild(script);
+          });
+        }
+        if (document.readyState === 'complete') loadBundles();
+        else window.addEventListener('load', loadBundles);
+      })();
+    </script>
   </body>
 </html>
