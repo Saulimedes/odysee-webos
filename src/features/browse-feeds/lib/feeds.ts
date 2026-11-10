@@ -6,7 +6,15 @@ export const FEED_PAGE_SIZE = 40;
 export const discoverFeed = (page: number, pageSize = FEED_PAGE_SIZE): FeedQuery => ({ order: 'trending', days: 30, pageSize, page });
 
 export const categoryFeed = (category: Category, page: number, pageSize = category.pageSize): FeedQuery => ({
-  channelIds: category.channelIds, order: 'trending', days: category.days, pageSize, page,
+  channelIds: category.channelIds.length > 0 ? category.channelIds : undefined,
+  excludedChannelIds: category.excludedChannelIds,
+  order: category.order ?? 'trending',
+  days: category.days,
+  pageSize,
+  page,
+  limitPerChannel: category.limitPerChannel,
+  excludeShorts: category.excludeShorts,
+  languages: category.languages,
 });
 
 export const channelFeed = (channelId: string, page: number, pageSize = FEED_PAGE_SIZE): FeedQuery => ({

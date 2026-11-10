@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from '@/shared/i18n';
 import { peekClaims, queryClaims, type FeedQuery, type Video } from '@/entities/video';
 import { categoryFeed } from '@/features/browse-feeds';
-import { useHomepage, useHomepageFailed, type Category } from '@/entities/category';
+import { categoryIcon, useHomepage, useHomepageFailed, type Category } from '@/entities/category';
 import { useSession } from '@/entities/session';
+import { HOME_ROWS, useLayout, visibleItems } from '@/features/customize-layout';
 import { getFollowingVideos } from '@/features/following';
 import { progressPercent, usePlaybackHistory } from '@/features/playback-history';
 import type { VideoRow } from '@/widgets/video-rows';
@@ -11,16 +13,16 @@ interface RowState { videos: Video[]; status: VideoRow['status']; page: number; 
 
 interface Descriptor { id: string; title: string; icon?: string | null; pageSize: number; feed?: (page: number) => FeedQuery }
 
-const FOLLOWING_ID = 'following';
 const EMPTY_ROW: RowState = { videos: [], status: 'idle', page: 0, hasMore: false, stale: false };
 const PREFETCH_AHEAD = 3;
 const MAX_ROW_ITEMS = 48;
+const NO_VIDEOS: Video[] = [];
 
 function describe(featured: Category | null, categories: Category[], loggedIn: boolean): Descriptor[] {
   const list: Descriptor[] = [];
-  if (loggedIn) list.push({ id: FOLLOWING_ID, title: 'Following', icon: null, pageSize: 20 });
+  if (loggedIn) list.push({ id: HOME_ROWS.following, title: 'Following', icon: null, pageSize: 20 });
   [featured, ...categories].forEach((category) => {
-    if (category) list.push({ id: category.id, title: category.label, icon: category.icon || category.label, pageSize: category.pageSize, feed: (page) => categoryFeed(category, page) });
+    if (category) list.push({ id: category.id, title: category.label, icon: categoryIcon(category), pageSize: category.pageSize, feed: (page) => categoryFeed(category, page) });
   });
   return list;
 }
@@ -32,12 +34,17 @@ function cached(descriptor: Descriptor): RowState | null {
 }
 
 export function useHomeRows() {
+  const t = useTranslation();
   const homepage = useHomepage();
   const failed = useHomepageFailed();
   const { user } = useSession();
   const history = usePlaybackHistory();
+  const layout = useLayout('home');
   const loggedIn = Boolean(user?.primary_email);
-  const descriptors = useMemo(() => describe(homepage?.featured ?? null, homepage?.categories ?? [], loggedIn), [homepage, loggedIn]);
+  const descriptors = useMemo(
+    () => visibleItems(describe(homepage?.featured ?? null, homepage?.categories ?? [], loggedIn), layout),
+    [homepage, loggedIn, layout],
+  );
   const descriptorsRef = useRef(descriptors);
   descriptorsRef.current = descriptors;
 
@@ -98,14 +105,25 @@ export function useHomeRows() {
     });
   }, [descriptors]);
 
+  const wanted = useCallback((descriptor: Descriptor) => {
+    const state = dataRef.current[descriptor.id];
+    return !state || state.status === 'idle' || state.status === 'error' || state.stale;
+  }, []);
+
   const ensure = useCallback((rowId: string) => {
     const list = descriptorsRef.current;
     const at = Math.max(0, list.findIndex((descriptor) => descriptor.id === rowId));
+    const onScreen: Array<Promise<void>> = [];
+    const later: Descriptor[] = [];
     list.slice(at, at + PREFETCH_AHEAD + 1).forEach((descriptor, offset) => {
-      const state = dataRef.current[descriptor.id];
-      if (!state || state.status === 'idle' || state.status === 'error' || state.stale) void load(descriptor, 1, offset > 1);
+      if (!wanted(descriptor)) return;
+      if (offset > 1 || dataRef.current[descriptor.id]?.videos.length) later.push(descriptor);
+      else onScreen.push(load(descriptor, 1, false));
     });
-  }, [load]);
+    const start = () => later.forEach((descriptor) => { if (wanted(descriptor)) void load(descriptor, 1, true); });
+    if (onScreen.length === 0) start();
+    else void Promise.all(onScreen).then(start);
+  }, [load, wanted]);
 
   useEffect(() => {
     if (descriptors.length > 0) ensure(descriptors[0].id);
@@ -117,28 +135,43 @@ export function useHomeRows() {
     if (descriptor && state?.hasMore) void load(descriptor, state.page + 1, false);
   }, [load]);
 
-  const rows = useMemo<VideoRow[]>(() => {
+  const progress = useMemo(() => {
     const percent = new Map(history.map((item) => [item.video.id, progressPercent(item)]));
-    const list: VideoRow[] = [];
-    if (history.length > 0) {
-      list.push({ id: 'continue', title: 'Continue Watching', videos: history.map((item) => item.video), status: 'ready', progress: (video) => percent.get(video.id) || 0 });
-    }
-    descriptors.forEach((descriptor) => {
+    return (video: Video) => percent.get(video.id) || 0;
+  }, [history]);
+  const continueVideos = useMemo(() => history.map((item) => item.video), [history]);
+
+  const known = useRef(new Map<string, VideoRow>());
+  const rows = useMemo<VideoRow[]>(() => {
+    const keep = (next: VideoRow) => {
+      const previous = known.current.get(next.id);
+      const same = previous && previous.title === next.title && previous.icon === next.icon && previous.videos === next.videos
+        && previous.status === next.status && previous.hasMore === next.hasMore && previous.progress === next.progress;
+      const row = same ? previous : next;
+      known.current.set(row.id, row);
+      return row;
+    };
+    const list: VideoRow[] = descriptors.map((descriptor) => {
       const state = data[descriptor.id];
-      list.push({
+      return keep({
         id: descriptor.id,
-        title: descriptor.title,
+        title: t(descriptor.title),
         icon: descriptor.icon,
-        videos: state?.videos ?? [],
+        videos: state?.videos ?? NO_VIDEOS,
         status: state?.status ?? 'idle',
         hasMore: state?.hasMore,
-        progress: (video) => percent.get(video.id) || 0,
+        progress,
       });
     });
-    return list;
-  }, [descriptors, data, history]);
+    if (history.length > 0) {
+      const after = list.findIndex((row) => row.id === HOME_ROWS.following) + 1;
+      list.splice(after, 0, keep({ id: HOME_ROWS.continue, title: t('Continue Watching'), videos: continueVideos, status: 'ready', progress }));
+    }
+    return visibleItems(list, layout);
+  }, [descriptors, data, history, layout, t, progress, continueVideos]);
 
   const hasVideos = rows.some((row) => row.videos.length > 0);
   const loading = !hasVideos && ((homepage === null && !failed) || rows.some((row) => row.status === 'idle' || row.status === 'loading'));
-  return { rows, ensure, loadMore, hasVideos, loading, failed: failed && homepage === null };
+  const allHidden = homepage !== null && rows.length === 0 && layout.hidden.length > 0;
+  return { rows, ensure, loadMore, hasVideos, loading, allHidden, failed: failed && homepage === null };
 }

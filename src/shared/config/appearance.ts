@@ -3,9 +3,9 @@ import { SETTING_DEFAULTS, SYSTEM_FONT_STACK, UI_FONTS, CORNER_STYLES, STORAGE }
 import { getSetting, subscribeSettings } from './settings';
 
 interface RGB { r: number; g: number; b: number }
-interface Palette { bg: string; surface: string; surfaceAlt: string; surfaceHover: string; text: string; muted: string; dim: string; border: string }
+interface Palette { bg: string; surface: string; surfaceAlt: string; surfaceHover: string; text: string; muted: string; dim: string; border: string; panel?: string; panelAlt?: string }
 
-const APPEARANCE_SETTINGS: SettingKey[] = ['themeMode', 'accentColor', 'uiFont', 'cornerStyle', 'textScale', 'tileScale'];
+const APPEARANCE_SETTINGS: SettingKey[] = ['themeMode', 'accentColor', 'uiFont', 'cornerStyle', 'textScale', 'tileScale', 'iconVariant'];
 
 const PALETTES: Record<string, Palette> = {
   black: { bg: '#000000', surface: '#17171a', surfaceAlt: '#0e0e11', surfaceHover: '#212126', text: '#ffffff', muted: '#909296', dim: '#666666', border: '#2a2a30' },
@@ -98,9 +98,14 @@ function tonePalette(accentColor: string, spec: { satScale: number; satMin: numb
   };
 }
 
+const AMBIENT: Palette = {
+  bg: '#0b0b0d', surface: 'rgba(255, 255, 255, 0.07)', surfaceAlt: 'rgba(255, 255, 255, 0.045)', surfaceHover: 'rgba(255, 255, 255, 0.14)', border: 'rgba(255, 255, 255, 0.12)',
+  text: '#ffffff', muted: 'rgba(255, 255, 255, 0.7)', dim: 'rgba(255, 255, 255, 0.5)', panel: '#18181b', panelAlt: '#101012',
+};
+
 export const paletteFor = (themeMode: string, accentColor: string): Palette => {
   if (themeMode === 'tinted') return tonePalette(accentColor, { satScale: 0.6, satMin: 30, satMax: 54, bg: 10, surface: 20, surfaceAlt: 15, hover: 27, border: 32, muted: 70, dim: 50 });
-  if (themeMode === 'ambient') return tonePalette(accentColor, { satScale: 0.4, satMin: 14, satMax: 32, bg: 6, surface: 14, surfaceAlt: 10, hover: 20, border: 25, muted: 72, dim: 52 });
+  if (themeMode === 'ambient') return AMBIENT;
   if (themeMode === 'lighttinted') return tonePalette(accentColor, { satScale: 0.55, satMin: 26, satMax: 58, bg: 94, surface: 98, surfaceAlt: 90, hover: 86, border: 78, muted: 36, dim: 52, light: true });
   return PALETTES[themeMode] || PALETTES.black;
 };
@@ -109,8 +114,11 @@ function paletteVars(palette: Palette) {
   return {
     '--bg': palette.bg,
     '--bg-rgb': rgbString(hexToRgb(palette.bg)),
+    '--text-rgb': rgbString(hexToRgb(palette.text)),
     '--surface': palette.surface,
     '--surface-alt': palette.surfaceAlt,
+    '--panel': palette.panel ?? palette.surface,
+    '--panel-alt': palette.panelAlt ?? palette.surfaceAlt,
     '--surface-hover': palette.surfaceHover,
     '--text': palette.text,
     '--text-muted': palette.muted,
@@ -124,13 +132,13 @@ const fontStack = (code: string) => {
   return font && font.family ? `'${font.family}', ${SYSTEM_FONT_STACK}` : SYSTEM_FONT_STACK;
 };
 
-export function computeAppearance(settings: Pick<Settings, 'themeMode' | 'accentColor' | 'uiFont' | 'cornerStyle' | 'textScale' | 'tileScale'>): { attrs: Record<string, string>; vars: Record<string, string> } {
-  const { themeMode, accentColor, uiFont, cornerStyle, textScale, tileScale } = settings;
+export function computeAppearance(settings: Pick<Settings, 'themeMode' | 'accentColor' | 'uiFont' | 'cornerStyle' | 'textScale' | 'tileScale'> & Partial<Pick<Settings, 'iconVariant'>>): { attrs: Record<string, string>; vars: Record<string, string> } {
+  const { themeMode, accentColor, uiFont, cornerStyle, textScale, tileScale, iconVariant = 'outlined' } = settings;
   const palette = paletteFor(themeMode, accentColor);
   const accent = accentVars(accentColor, isLightTheme(themeMode));
   const radii = (CORNER_STYLES.find((corner) => corner.code === cornerStyle) || CORNER_STYLES[1]).radii;
   return {
-    attrs: { 'data-theme': themeMode },
+    attrs: { 'data-theme': themeMode, 'data-icons': iconVariant, 'data-contrast': accent['--accent-contrast'] === '#000000' ? 'dark' : 'light' },
     vars: {
       ...accent,
       ...paletteVars(palette),

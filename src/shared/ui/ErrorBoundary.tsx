@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { t } from '@/shared/i18n';
 
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -15,7 +16,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     if (!this.state.error) return this.props.children;
     return (
       <div className="emptyState">
-        <div className="emptyState__title">Something went wrong</div>
+        <div className="emptyState__title">{t('Something went wrong')}</div>
         <div className="emptyState__hint">{this.state.error.message}</div>
       </div>
     );

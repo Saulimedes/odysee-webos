@@ -1,7 +1,10 @@
 import { memo, useRef, type ReactNode } from 'react';
+import { isPointerDriven } from '@/shared/lib';
 
 const OVERSCAN_ROWS = 1;
 const EDGE = 28;
+// The content starts PAD below the top of the clipped box, the same room is kept below the last row
+const PAD = 10;
 
 interface Props<T> {
   items: T[];
@@ -23,9 +26,12 @@ function VirtualGridInner<T>({ items, columns, cellWidth, cellHeight, gap, heigh
   const activeRow = Math.floor(activeIndex / columns);
   const rowTop = activeRow * rowHeight;
   let top = topRef.current;
-  if (rowTop - EDGE < top) top = rowTop - EDGE;
+  // A tile the cursor picked is on screen, and the list stays where it is: scrolling would slide the next tile under the cursor
+  const onScreen = rowTop + cellHeight > top && rowTop < top + height;
+  if (isPointerDriven() && onScreen) top = topRef.current;
+  else if (rowTop - EDGE < top) top = rowTop - EDGE;
   else if (rowTop + cellHeight + EDGE > top + height) top = rowTop + cellHeight + EDGE - height;
-  top = Math.max(0, Math.min(top, Math.max(0, totalRows * rowHeight - height)));
+  top = Math.max(0, Math.min(top, Math.max(0, totalRows * rowHeight - gap + PAD * 2 - height)));
   topRef.current = top;
 
   const first = Math.max(0, Math.floor(top / rowHeight) - OVERSCAN_ROWS);

@@ -3,6 +3,8 @@ import { PRIORITY, useGridNav, useNav, useRemembered } from '@/shared/lib';
 import { gridHeight, CARD_GAP } from '@/shared/config';
 import { EmptyState, PageTitle, Spinner, VirtualGrid } from '@/shared/ui';
 
+const NEAR_END_ROWS = 2;
+
 export interface GridLayout { columns: number; card: { width: number; height: number }; rowHeight: number }
 
 interface Props<T> {
@@ -18,7 +20,7 @@ interface Props<T> {
   emptyHint?: string;
   emptyIcon?: ReactNode;
   getKey: (item: T) => string;
-  renderItem: (item: T, index: number, active: boolean, pick: (index: number) => void) => ReactNode;
+  renderItem: (item: T, index: number, active: boolean, pick: (index: number) => void, hover: (index: number) => void) => ReactNode;
   onSelect: (item: T, index: number) => void;
   onLoadMore?: () => void;
   onLeftEdge?: () => void;
@@ -50,6 +52,9 @@ export function ItemGrid<T>({
     selectRef.current(itemsRef.current[at], at);
   }, [setIndex]);
 
+  const hover = useCallback((at: number) => setIndex(at), [setIndex]);
+
+  const active = enabled && !nav.sidebarFocused;
   useGridNav({
     count: items.length,
     columns,
@@ -59,10 +64,14 @@ export function ItemGrid<T>({
     onLeftEdge: onLeftEdge ?? nav.focusSidebar,
     onTopEdge,
     onNearEnd: onLoadMore,
-    enabled: enabled && !nav.sidebarFocused,
+    enabled: active,
     priority: PRIORITY.content,
   });
 
+  const nearEnd = items.length > 0 && Math.floor(index / columns) >= Math.floor((items.length - 1) / columns) - NEAR_END_ROWS;
+  useEffect(() => {
+    if (active && nearEnd) onLoadMore?.();
+  }, [active, nearEnd, items.length, onLoadMore]);
 
   return (
     <section className="itemGrid">
@@ -74,9 +83,7 @@ export function ItemGrid<T>({
       ) : items.length === 0 ? (
         <EmptyState icon={emptyIcon} title={emptyTitle} hint={emptyHint} />
       ) : (
-        <div
-          onWheel={(event) => setIndex(Math.max(0, Math.min(items.length - 1, index + (event.deltaY > 0 ? columns : -columns))))}
-        >
+        <>
           <VirtualGrid
             items={items}
             columns={columns}
@@ -86,10 +93,10 @@ export function ItemGrid<T>({
             height={viewport}
             activeIndex={index}
             getKey={getKey}
-            renderItem={(item, at, active) => renderItem(item, at, active, pick)}
+            renderItem={(item, at, active) => renderItem(item, at, active, pick, hover)}
           />
           {loadingMore && <div className="itemGrid__more"><Spinner inline /></div>}
-        </div>
+        </>
       )}
     </section>
   );

@@ -3,7 +3,7 @@ import { SEARCH_PAGE, type SearchPage } from '../api/search';
 
 interface State<T> { items: T[]; from: number; hasMore: boolean }
 
-export function useSearchResults<T extends { id: string }>(key: string | null, fetchPage: (from: number) => Promise<SearchPage<T>>) {
+export function useSearchResults<T extends { id: string }>(key: string | null, fetchPage: (from: number, isCurrent: () => boolean) => Promise<SearchPage<T>>) {
   const [state, setState] = useState<State<T>>({ items: [], from: 0, hasMore: false });
   const [loading, setLoading] = useState(false);
   const fetchRef = useRef(fetchPage);
@@ -17,7 +17,7 @@ export function useSearchResults<T extends { id: string }>(key: string | null, f
     busy.current = true;
     setLoading(true);
     try {
-      const page = await fetchRef.current(from);
+      const page = await fetchRef.current(from, () => current === generation.current);
       if (current !== generation.current) return;
       setState((previous) => {
         const known = new Set((from === 0 ? [] : previous.items).map((item) => item.id));

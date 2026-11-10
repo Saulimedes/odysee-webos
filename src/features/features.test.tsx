@@ -285,4 +285,29 @@ describe('browse feeds', () => {
     expect(feeds.categoryFeed(category, 1, 40).pageSize).toBe(40);
     expect(feeds.channelFeed('c', 3)).toEqual({ channelIds: ['c'], order: 'new', pageSize: feeds.FEED_PAGE_SIZE, page: 3 });
   });
+
+  it('asks for a category the way Odysee does: order, one claim per channel, shorts and languages', async () => {
+    const feeds = await import('./browse-feeds');
+    const category = { id: 'X', label: 'X', icon: '', channelIds: ['a', 'b'], pageSize: 12, days: 180, sortOrder: 1, order: 'new' as const, limitPerChannel: 1, excludeShorts: true, languages: ['en'] };
+    expect(feeds.categoryFeed(category, 2)).toEqual({
+      channelIds: ['a', 'b'], order: 'new', days: 180, pageSize: 12, page: 2, limitPerChannel: 1, excludeShorts: true, languages: ['en'],
+    });
+    const old = { id: 'X', label: 'X', icon: '', channelIds: ['a'], pageSize: 12, days: 60, sortOrder: 1 };
+    expect(feeds.categoryFeed(old, 1)).toMatchObject({ order: 'trending', limitPerChannel: undefined, excludeShorts: undefined, languages: undefined });
+  });
+
+  it('asks for everything except the left out channels when a category has none of its own', async () => {
+    const feeds = await import('./browse-feeds');
+    const open = { id: 'WILD_WEST', label: 'Wild West', icon: 'WildWest', channelIds: [], excludedChannelIds: ['x', 'y'], pageSize: 20, days: 30, sortOrder: 999, limitPerChannel: 1, languages: ['en'] };
+    const feed = feeds.categoryFeed(open, 1);
+    expect(feed).toMatchObject({ excludedChannelIds: ['x', 'y'], limitPerChannel: 1, languages: ['en'] });
+    expect(feed.channelIds).toBeUndefined();
+  });
+
+  it('uses the same list of channels for every page, so that the pages and the Home row share their cache', async () => {
+    const feeds = await import('./browse-feeds');
+    const category = { id: 'X', label: 'X', icon: '', channelIds: ['a', 'b'], pageSize: 12, days: 180, sortOrder: 1 };
+    expect(feeds.categoryFeed(category, 1).channelIds).toBe(feeds.categoryFeed(category, 2).channelIds);
+    expect(feeds.categoryFeed(category, 1)).toEqual(feeds.categoryFeed(category, 1, category.pageSize));
+  });
 });

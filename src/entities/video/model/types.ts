@@ -11,6 +11,8 @@ export interface Video {
   channelThumb?: string;
   claimName: string;
   hash?: string;
+  size?: number;
+  mediaType?: string;
 }
 
 export interface RawClaim {
@@ -23,7 +25,7 @@ export interface RawClaim {
     release_time?: string;
     thumbnail?: { url?: string };
     video?: { duration?: number; height?: number };
-    source?: { hash?: string };
+    source?: { hash?: string; size?: string | number; media_type?: string };
     claims?: string[];
   };
   signing_channel?: {

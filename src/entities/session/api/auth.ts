@@ -1,4 +1,5 @@
 import { LBRY_COM_URL } from '@/shared/config';
+import { t } from '@/shared/i18n';
 import { postForm, invalidate } from '@/shared/api';
 import { getToken, updateSession, clearSession, type User } from '../model/store';
 
@@ -27,7 +28,7 @@ export async function ensureToken() {
 
 export async function signIn(email: string, password: string): Promise<{ success: true; user: User } | { success: false; error: string }> {
   const token = await ensureToken();
-  if (!token) return { success: false, error: 'Network error. Please try again.' };
+  if (!token) return { success: false, error: t('Network error. Please try again.') };
   try {
     const { body } = await postForm<ApiResponse<UserData>>(`${LBRY_COM_URL}/user/signin`, { auth_token: token, email, password });
     if (body.success && body.data) {
@@ -36,16 +37,16 @@ export async function signIn(email: string, password: string): Promise<{ success
       updateSession({ token: nextToken || token, user });
       return { success: true, user };
     }
-    return { success: false, error: errorText(body.error, 'Login failed') };
+    return { success: false, error: errorText(body.error, t('Login failed')) };
   } catch (error) {
     console.error('Sign in failed', error);
-    return { success: false, error: 'Network error. Please try again.' };
+    return { success: false, error: t('Network error. Please try again.') };
   }
 }
 
 export async function requestMagicLink(email: string): Promise<{ success: boolean; error?: string }> {
   const token = await ensureToken();
-  if (!token) return { success: false, error: 'Network error. Please try again.' };
+  if (!token) return { success: false, error: t('Network error. Please try again.') };
   try {
     const first = await postForm<ApiResponse<UserData>>(`${LBRY_COM_URL}/user/signin`, { auth_token: token, email });
     if (first.body.success) {
@@ -56,10 +57,10 @@ export async function requestMagicLink(email: string): Promise<{ success: boolea
       const resend = await postForm<ApiResponse<unknown>>(`${LBRY_COM_URL}/user_email/resend_token`, { auth_token: token, email, only_if_expired: 'true' });
       if (resend.body.success) return { success: true };
     }
-    return { success: false, error: errorText(first.body.error, 'Failed to send magic link') };
+    return { success: false, error: errorText(first.body.error, t('Failed to send magic link')) };
   } catch (error) {
     console.error('Magic link failed', error);
-    return { success: false, error: 'Network error. Please try again.' };
+    return { success: false, error: t('Network error. Please try again.') };
   }
 }
 

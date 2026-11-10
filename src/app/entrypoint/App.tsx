@@ -1,28 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { KEY } from '@/shared/config';
-import { NavContext, useKeys, type NavApi } from '@/shared/lib';
+import { NavContext, pointerMoved, useKeys, useWheelNavigation, type NavApi } from '@/shared/lib';
+import { Spinner } from '@/shared/ui';
 import type { Video } from '@/entities/video';
 import { addToHistory, flushCollections, removeFromCollection } from '@/features/collections';
-import { Player } from '@/widgets/player';
 import { Sidebar } from '@/widgets/sidebar';
 import { Screens } from '../routing/Screens';
 import { handleLogin, handleLogout } from '../model/account';
 
+const loadPlayer = () => import('@/widgets/player');
+const Player = lazy(() => loadPlayer().then((module) => ({ default: module.Player })));
+const PLAYER_PREFETCH_MS = 3000;
+
 const BACK_TARGET: Record<string, string> = { continue: 'library', history: 'library', 'watch-later': 'library', favorites: 'library' };
 const BACK_PRIORITY = 1;
+const START_TIMEOUT_MS = 8000;
 
 export default function App() {
   const [screen, setScreen] = useState('home');
   const [sidebarFocused, setSidebarFocused] = useState(false);
   const [channel, setChannel] = useState<{ id: string; name: string } | null>(null);
   const [playing, setPlaying] = useState<{ video: Video; startAt?: number } | null>(null);
+  useWheelNavigation();
 
   useEffect(() => {
-    window.__odyseeReady?.();
+    const giveUp = setTimeout(() => window.__odyseeReady?.(), START_TIMEOUT_MS);
+    const warmUp = setTimeout(() => { void loadPlayer(); }, PLAYER_PREFETCH_MS);
     const flush = () => flushCollections();
     window.addEventListener('pagehide', flush);
     document.addEventListener('visibilitychange', flush);
     return () => {
+      clearTimeout(giveUp);
+      clearTimeout(warmUp);
       window.removeEventListener('pagehide', flush);
       document.removeEventListener('visibilitychange', flush);
     };
@@ -69,18 +78,20 @@ export default function App() {
   return (
     <NavContext.Provider value={nav as unknown as NavApi}>
       {playing ? (
-        <Player
-          key={playing.video.id}
-          video={playing.video}
-          startAt={playing.startAt}
-          onClose={() => setPlaying(null)}
-          onPlayNext={(next) => play(next)}
-          onOpenChannel={nav.openChannel}
-        />
+        <Suspense fallback={<div className="player"><div className="player__buffering"><Spinner scale={0.6} /></div></div>}>
+          <Player
+            key={playing.video.id}
+            video={playing.video}
+            startAt={playing.startAt}
+            onClose={() => setPlaying(null)}
+            onPlayNext={(next) => play(next)}
+            onOpenChannel={nav.openChannel}
+          />
+        </Suspense>
       ) : (
         <div className="appShell">
-          <Sidebar selected={screen} focused={sidebarFocused} onSelect={go} onLeave={() => setSidebarFocused(false)} />
-          <main className="appShell__main">
+          <Sidebar selected={screen} focused={sidebarFocused} onSelect={go} onLeave={() => setSidebarFocused(false)} onFocus={() => setSidebarFocused(true)} />
+          <main className="appShell__main" onMouseMove={(event) => { if (sidebarFocused && pointerMoved(event)) setSidebarFocused(false); }}>
             <Screens
               screen={screen}
               channel={channel}

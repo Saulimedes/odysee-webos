@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { IconBulb, IconStar } from '@tabler/icons-react';
+import { useTranslation } from '@/shared/i18n';
 import { EmptyState, Spinner } from '@/shared/ui';
-import { queryClaims, type FeedQuery } from '@/entities/video';
+import { peekClaims, queryClaims, type FeedQuery } from '@/entities/video';
 import { categoryFeed, channelFeed, discoverFeed, FEED_PAGE_SIZE } from '@/features/browse-feeds';
 import { useHomepage } from '@/entities/category';
 import { FeedGrid } from '@/widgets/item-grid';
@@ -14,28 +15,29 @@ function useFeed(source: Source) {
   const build = useCallback((page: number): FeedQuery | null => {
     if (source.kind === 'discover') return discoverFeed(page);
     if (source.kind === 'channel') return channelFeed(source.id, page);
-    return category ? categoryFeed(category, page, FEED_PAGE_SIZE) : null;
+    return category ? categoryFeed(category, page) : null;
   }, [source, category]);
   return { build, category, homepage };
 }
 
 export function FeedPage({ source }: { source: Source }) {
+  const t = useTranslation();
   const { build, category, homepage } = useFeed(source);
   const needsCategory = source.kind === 'featured' || source.kind === 'category';
   const fetchPage = useCallback(async (page: number) => {
     const feed = build(page);
-    return feed ? queryClaims(feed) : [];
-  }, [build]);
+    return feed ? queryClaims(feed, { persist: Boolean(category) && page === 1 }) : [];
+  }, [build, category]);
 
   if (needsCategory && !category) {
-    return homepage ? <EmptyState icon={<IconStar size={64} />} title="Content not available" /> : <div className="center"><Spinner /></div>;
+    return homepage ? <EmptyState icon={<IconStar size={64} />} title={t('Content not available')} /> : <div className="center"><Spinner /></div>;
   }
 
   const copy = {
-    discover: { title: 'Discover', subtitle: 'Trending videos on Odysee', empty: 'No discover content', icon: <IconBulb size={64} /> },
-    featured: { title: 'Featured', subtitle: undefined, empty: 'No featured videos', icon: <IconStar size={64} /> },
-    category: { title: category?.label ?? 'Category', subtitle: undefined, empty: 'No videos found in this category', icon: <IconStar size={64} /> },
-    channel: { title: source.kind === 'channel' ? source.name : 'Channel', subtitle: undefined, empty: 'No videos found', icon: <IconStar size={64} /> },
+    discover: { title: t('Discover'), subtitle: t('Trending videos on Odysee'), empty: t('No discover content'), icon: <IconBulb size={64} /> },
+    featured: { title: t('Featured'), subtitle: undefined, empty: t('No featured videos'), icon: <IconStar size={64} /> },
+    category: { title: category ? t(category.label) : t('Category'), subtitle: undefined, empty: t('No videos found in this category'), icon: <IconStar size={64} /> },
+    channel: { title: source.kind === 'channel' ? source.name : t('Channel'), subtitle: undefined, empty: t('No videos found'), icon: <IconStar size={64} /> },
   }[source.kind];
 
   const feedKey = source.kind === 'discover' || source.kind === 'featured' ? source.kind : `${source.kind}:${source.id}`;
@@ -43,7 +45,8 @@ export function FeedPage({ source }: { source: Source }) {
     <FeedGrid
       feedKey={feedKey}
       fetchPage={fetchPage}
-      pageSize={FEED_PAGE_SIZE}
+      pageSize={category ? category.pageSize : FEED_PAGE_SIZE}
+      firstPage={category ? () => peekClaims(categoryFeed(category, 1)) : undefined}
       title={copy.title}
       subtitle={copy.subtitle}
       emptyTitle={copy.empty}

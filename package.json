@@ -4,7 +4,7 @@
   "description": "Odysee Unofficial",
   "scripts": {
     "start": "webpack serve --config ./webpack.config.js --mode development",
-    "build": "node tools/sync-version.js && webpack --config ./webpack.config.js --mode production && node tools/check-syntax.js",
+    "build": "node tools/check-i18n.js && node tools/sync-version.js && webpack --config ./webpack.config.js --mode production && node tools/check-syntax.js",
     "package": "node tools/package.js",
     "deploy": "ares-install ${npm_package_name}_${npm_package_version}_all.ipk",
     "launch": "ares-launch ${npm_package_name}",
@@ -16,12 +16,16 @@
     "typecheck": "tsc --noEmit",
     "lint:fsd": "steiger src --fail-on-warnings",
     "lint:unused": "knip && knip --production",
+    "check:i18n": "node tools/check-i18n.js",
     "test:chrome68": "node tests/browser/chrome68.cjs",
     "verify": "npm run typecheck && npm run lint:fsd && npm run lint:unused && npm run test:coverage && npm run build && npm run test:chrome68"
   },
   "keywords": [],
   "author": "informatic",
   "license": "GPL-3.0",
+  "sideEffects": [
+    "*.css"
+  ],
   "devDependencies": {
     "@babel/core": "^8.0.7",
     "@babel/preset-env": "^8.0.7",

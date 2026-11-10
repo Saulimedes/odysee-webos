@@ -6,14 +6,19 @@ import type { RawClaim, Video } from '../model/types';
 export const DEFAULT_PAGE_SIZE = 20;
 const TTL = 5 * 60 * 1000;
 const DAY = 86400;
+const HOUR = 3600;
 
 export interface FeedQuery {
   channelIds?: string[];
+  excludedChannelIds?: string[];
   claimIds?: string[];
   order?: 'trending' | 'new' | 'top';
   days?: number;
   page?: number;
   pageSize?: number;
+  limitPerChannel?: number;
+  excludeShorts?: boolean;
+  languages?: string[];
 }
 
 export interface QueryOptions { persist?: boolean; background?: boolean }
@@ -46,12 +51,33 @@ export function buildParams(feed: FeedQuery) {
   params.claim_type = ['stream'];
   params.fee_amount = '<=0';
   params.order_by = ORDER_BY[feed.order || 'trending'];
+  params.has_source = true;
   if (feed.channelIds) params.channel_ids = feed.channelIds;
-  if (feed.days) params.release_time = `>${Math.floor(Date.now() / 1000) - feed.days * DAY}`;
+  if (feed.excludedChannelIds && feed.excludedChannelIds.length > 0) params.not_channel_ids = feed.excludedChannelIds;
+  // To the full hour like Odysee, so a repeated query is answered from the server's cache
+  if (feed.days) params.release_time = `>${Math.floor((Date.now() / 1000 - feed.days * DAY) / HOUR) * HOUR}`;
+  if (feed.limitPerChannel) params.limit_claims_per_channel = feed.limitPerChannel;
+  if (feed.excludeShorts) params.exclude_shorts = true;
+  if (feed.languages && feed.languages.length > 0) params.any_languages = feed.languages;
   return params;
 }
 
-const cacheKey = (feed: FeedQuery) => `claims:${hash(JSON.stringify([feed.channelIds, feed.claimIds, feed.order, feed.days, feed.page, feed.pageSize, getSetting('nsfw')]))}`;
+const channelKeys = new WeakMap<string[], string>();
+
+function channelsKey(ids: string[] | undefined) {
+  if (!ids) return '';
+  let key = channelKeys.get(ids);
+  if (key === undefined) {
+    key = hash(ids.join(','));
+    channelKeys.set(ids, key);
+  }
+  return key;
+}
+
+const cacheKey = (feed: FeedQuery) => `claims:${hash(JSON.stringify([
+  channelsKey(feed.channelIds), channelsKey(feed.excludedChannelIds), feed.claimIds, feed.order, feed.days, feed.page, feed.pageSize,
+  feed.limitPerChannel, feed.excludeShorts, feed.languages, getSetting('nsfw'),
+]))}`;
 
 export function peekClaims(feed: FeedQuery): { videos: Video[]; stale: boolean } | undefined {
   const hit = peek<Video[]>(cacheKey(feed), { ttl: TTL, persist: true });

@@ -1,17 +1,10 @@
-const BY_LABEL: Record<string, string> = {
-  Featured: 'Featured', Discover: 'MindBlown', 'Pop Culture': 'PopCulture', Art: 'Artists', Artists: 'Artists',
-  Education: 'Education', Lifestyle: 'Lifestyle', Spooky: 'Ghost', Horror: 'Ghost', Gaming: 'Gaming', Comedy: 'Comedy',
-  Music: 'Music', Sports: 'Sports', Science: 'Science', Technology: 'Tech', Tech: 'Tech', Finance: 'Finance',
-  Spirituality: 'Spirituality', News: 'News', Movies: 'Movies', Cooking: 'Chef', Food: 'Chef',
-};
+import { iconKey } from '@/shared/ui';
 
-const BY_ICON: Record<string, string> = {
-  MindBlown: 'MindBlown', Ghost: 'Ghost', Speaker: 'Tech', Tech: 'Tech', MusicCategory: 'Music', Universe: 'Universe',
-  DollarSign: 'Finance', Aperature: 'News', WildWest: 'WildWest', Compass: 'Compass', Cheese: 'Cheese', Peace: 'Peace',
-  PorkBun: 'PorkBun', Chef: 'Chef', Conspiracy: 'Conspiracy', RabbitHole: 'Mysteries', Mysteries: 'Mysteries',
-  Anchor: 'Spirituality', Enlightenment: 'Spirituality', Holiday: 'Holiday', Life: 'Life', TV: 'PopCulture',
-};
+const BY_LABEL = new Map<string, string>([
+  ['discover', 'MindBlown'], ['art', 'Artists'], ['spooky', 'Horror'], ['outdoor', 'Life'], ['music', 'MusicCategory'],
+  ['tech', 'Speaker'], ['technology', 'Speaker'], ['finance', 'DollarSign'], ['finance 2.0', 'DollarSign'], ['news', 'Aperature'], ['news & politics', 'Aperature'],
+]);
 
 export function categoryIcon(category: { label: string; icon: string }) {
-  return BY_LABEL[category.label] || BY_ICON[category.icon] || BY_LABEL[category.icon] || null;
+  return iconKey(category.icon) || iconKey(BY_LABEL.get(category.label.toLowerCase())) || iconKey(category.label);
 }

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { IconSearch } from '@tabler/icons-react';
 import { KEY } from '@/shared/config';
-import { PRIORITY, isTextField, useDebounced, useKeys, useNav, useRemembered } from '@/shared/lib';
+import { useTranslation } from '@/shared/i18n';
+import { PRIORITY, isTextField, pointerMoved, useDebounced, useKeys, useNav, useRemembered } from '@/shared/lib';
 import { Spinner } from '@/shared/ui';
 import { ChannelGrid, VideoGrid } from '@/widgets/item-grid';
 import { searchChannelPage, searchVideoPage } from '../api/search';
@@ -11,22 +12,28 @@ type Zone = 'input' | 'type' | 'results';
 type Kind = 'videos' | 'channels';
 
 const MIN_QUERY = 3;
+const DEBOUNCE_MS = 300;
 
 export function SearchPage() {
+  const t = useTranslation();
   const nav = useNav<unknown>();
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useRemembered('search:text', '');
   const [kind, setKind] = useRemembered<Kind>('search:kind', 'videos');
   const [zone, setZone] = useRemembered<Zone>('search:zone', 'input');
-  const debounced = useDebounced(text, 500);
+  const debounced = useDebounced(text, DEBOUNCE_MS);
   const key = debounced.length >= MIN_QUERY ? `${kind}:${debounced}` : null;
-  const videos = useSearchResults(kind === 'videos' ? key : null, (from) => searchVideoPage(debounced, from));
-  const channels = useSearchResults(kind === 'channels' ? key : null, (from) => searchChannelPage(debounced, from));
+  const videos = useSearchResults(kind === 'videos' ? key : null, (from, isCurrent) => searchVideoPage(debounced, from, isCurrent));
+  const channels = useSearchResults(kind === 'channels' ? key : null, (from, isCurrent) => searchChannelPage(debounced, from, isCurrent));
   const active = kind === 'videos' ? videos : channels;
   const hasResults = active.items.length > 0;
   const enabled = !nav.sidebarFocused;
 
   const focusInput = () => { setZone('input'); inputRef.current?.focus(); };
+  const enter = (target: Zone) => {
+    inputRef.current?.blur();
+    setZone(target);
+  };
 
   useEffect(() => {
     if (zone === 'input') inputRef.current?.focus();
@@ -75,7 +82,7 @@ export function SearchPage() {
           ref={inputRef}
           type="text"
           value={text}
-          placeholder="Search Odysee..."
+          placeholder={t('Search Odysee...')}
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => setText(event.target.value)}
@@ -83,37 +90,42 @@ export function SearchPage() {
         />
         {(videos.loading || channels.loading) && <Spinner inline />}
       </div>
-      <div className={`tabs${zone === 'type' && enabled ? ' tabs--active' : ''}`}>
-        <span className={kind === 'videos' ? 'tab tab--on' : 'tab'} onClick={() => setKind('videos')}>Videos</span>
-        <span className={kind === 'channels' ? 'tab tab--on' : 'tab'} onClick={() => setKind('channels')}>Channels</span>
+      <div
+        className={`tabs${zone === 'type' && enabled ? ' tabs--active' : ''}`}
+        onMouseMove={(event) => { if (zone !== 'type' && pointerMoved(event)) enter('type'); }}
+      >
+        <span className={kind === 'videos' ? 'tab tab--on' : 'tab'} onClick={() => setKind('videos')}>{t('Videos')}</span>
+        <span className={kind === 'channels' ? 'tab tab--on' : 'tab'} onClick={() => setKind('channels')}>{t('Channels')}</span>
       </div>
-      {kind === 'videos' ? (
-        <VideoGrid
-          stateKey={`search:videos:${debounced}`}
-          videos={videos.items}
-          loading={videos.loading}
-          loadingMore={videos.loadingMore}
-          emptyTitle={key ? 'No results found' : 'Type at least 3 characters'}
-          emptyIcon={<IconSearch size={64} />}
-          onLoadMore={videos.loadMore}
-          onTopEdge={() => setZone('type')}
-          enabled={inResults}
-          height={resultsHeight}
-        />
-      ) : (
-        <ChannelGrid
-          stateKey={`search:channels:${debounced}`}
-          channels={channels.items}
-          loading={channels.loading}
-          loadingMore={channels.loadingMore}
-          emptyTitle={key ? 'No results found' : 'Type at least 3 characters'}
-          onSelect={(channel) => nav.openChannel(channel.id, channel.title)}
-          onLoadMore={channels.loadMore}
-          onTopEdge={() => setZone('type')}
-          enabled={inResults}
-          height={resultsHeight}
-        />
-      )}
+      <div className="searchResults" onMouseMove={(event) => { if (zone !== 'results' && hasResults && pointerMoved(event)) enter('results'); }}>
+        {kind === 'videos' ? (
+          <VideoGrid
+            stateKey={`search:videos:${debounced}`}
+            videos={videos.items}
+            loading={videos.loading}
+            loadingMore={videos.loadingMore}
+            emptyTitle={key ? t('No results found') : t('Type at least 3 characters')}
+            emptyIcon={<IconSearch size={64} />}
+            onLoadMore={videos.loadMore}
+            onTopEdge={() => setZone('type')}
+            enabled={inResults}
+            height={resultsHeight}
+          />
+        ) : (
+          <ChannelGrid
+            stateKey={`search:channels:${debounced}`}
+            channels={channels.items}
+            loading={channels.loading}
+            loadingMore={channels.loadingMore}
+            emptyTitle={key ? t('No results found') : t('Type at least 3 characters')}
+            onSelect={(channel) => nav.openChannel(channel.id, channel.title)}
+            onLoadMore={channels.loadMore}
+            onTopEdge={() => setZone('type')}
+            enabled={inResults}
+            height={resultsHeight}
+          />
+        )}
+      </div>
     </div>
   );
 }

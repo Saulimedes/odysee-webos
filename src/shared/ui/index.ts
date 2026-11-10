@@ -5,3 +5,6 @@ export { EmptyState, PageTitle } from './EmptyState';
 export { ErrorBoundary } from './ErrorBoundary';
 export { VirtualGrid } from './VirtualGrid';
 export { OdyseeIcon } from './OdyseeIcon';
+export { iconKey } from './icons';
+export { OptionPicker, ThemeSwatch } from './OptionPicker';
+export type { PickerOption } from './OptionPicker';

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bodyOf, claim, flush, mockFetch, rpcResult } from '../../tests/helpers';
-import { setViewport } from '../../tests/render';
+import { hoverOver, setViewport, shakeOver } from '../../tests/render';
 import { invalidate } from '@/shared/api';
 import { forgetRemembered } from '@/shared/lib/remember';
 import { session } from '@/entities/session/model/store';
@@ -53,8 +53,29 @@ describe('App', () => {
     api();
     await act(async () => { await refreshHomepage(true); });
     render(<App />);
-    expect(window.__odyseeReady).toHaveBeenCalled();
     expect(await screen.findByText('Game 0')).toBeInTheDocument();
+    await waitFor(() => expect(window.__odyseeReady).toHaveBeenCalled());
+  });
+
+  it('loads the player in the background once the app has started, so the first video starts quickly', async () => {
+    vi.useFakeTimers();
+    api();
+    render(<App />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
+    vi.useRealTimers();
+    expect(document.querySelector('.appShell')).not.toBeNull();
+  });
+
+  it('keeps the start animation until Home has content, but not forever', async () => {
+    api();
+    await act(async () => { await refreshHomepage(true); });
+    vi.stubGlobal('fetch', vi.fn((url: string) => (String(url).includes('/content/v2/get') ? Promise.resolve(new Response(JSON.stringify(content))) : new Promise(() => {}))));
+    vi.useFakeTimers();
+    render(<App />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(7000); });
+    expect(window.__odyseeReady).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
+    expect(window.__odyseeReady).toHaveBeenCalledTimes(1);
   });
 
   it('opens the sidebar and switches screens', async () => {
@@ -70,15 +91,48 @@ describe('App', () => {
     expect(document.querySelector('.sidebar--open')).toBeNull();
   });
 
+  it('opens the sidebar when the cursor moves onto it and closes it when the cursor moves onto the content', async () => {
+    api();
+    await act(async () => { await refreshHomepage(true); });
+    render(<App />);
+    await screen.findByText('Game 0');
+    expect(document.querySelector('.sidebar--open')).toBeNull();
+    hoverOver(document.querySelector('.sidebar') as Element);
+    expect(document.querySelector('.sidebar--open')).not.toBeNull();
+    hoverOver(screen.getByText('Discover'));
+    expect(document.querySelector('.sidebar--open')).not.toBeNull();
+    expect(document.querySelector('.sidebar__item--active')?.textContent).toBe('Discover');
+    hoverOver(document.querySelector('.appShell__main') as Element);
+    expect(document.querySelector('.sidebar--open')).toBeNull();
+    hoverOver(document.querySelector('.sidebar') as Element);
+    fireEvent.click(screen.getByText('Discover'));
+    expect(document.querySelector('.sidebar--open')).toBeNull();
+  });
+
+  it('does not close the sidebar for the hand shake of the remote', async () => {
+    api();
+    await act(async () => { await refreshHomepage(true); });
+    render(<App />);
+    await screen.findByText('Game 0');
+    hoverOver(document.querySelector('.appShell__main') as Element);
+    press(37);
+    expect(document.querySelector('.sidebar--open')).not.toBeNull();
+    shakeOver(document.querySelector('.appShell__main') as Element);
+    expect(document.querySelector('.sidebar--open')).not.toBeNull();
+    hoverOver(document.querySelector('.appShell__main') as Element);
+    expect(document.querySelector('.sidebar--open')).toBeNull();
+  });
+
   it('plays a video, saves it in history and returns to the same screen', async () => {
     api();
     await act(async () => { await refreshHomepage(true); });
     render(<App />);
     await screen.findByText('Game 0');
     press(13);
-    expect(document.querySelector('video')).not.toBeNull();
     expect(collections.get().history).toHaveLength(1);
     expect(document.querySelector('.appShell')).toBeNull();
+    expect(document.querySelector('.player')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
     press(461);
     press(461);
     expect(await screen.findByText('Game 0')).toBeInTheDocument();
@@ -180,6 +234,9 @@ describe('App', () => {
     press(37);
     for (let index = 0; index < 7; index++) press(40);
     press(13);
+    await screen.findByText('Settings', { selector: 'h1' });
+    for (let index = 0; index < 4; index++) press(40);
+    press(39);
     await screen.findByText('me@example.com');
     press(13);
     await waitFor(() => expect(session.get().user).toBeNull());

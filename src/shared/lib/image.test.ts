@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { thumbUrl } from './image';
+import { stillThumbUrl, thumbUrl } from './image';
 
 describe('thumbUrl', () => {
   it('returns null without a source', () => expect(thumbUrl(null, 400)).toBeNull());
@@ -8,4 +8,20 @@ describe('thumbUrl', () => {
     expect(thumbUrl('https://thumbnails.lbry.com/abc', 400)).toContain('/s:400:0/');
   });
   it('leaves other hosts untouched', () => expect(thumbUrl('https://spee.ch/a.png', 400)).toBe('https://spee.ch/a.png'));
+});
+
+describe('stillThumbUrl', () => {
+  it('asks the card service for a still picture of a file that can move, in 16:9', () => {
+    expect(stillThumbUrl('https://thumbs.odycdn.com/a.webp', 401)).toBe('https://thumbnails.odycdn.com/card/s:480:270/quality:80/plain/https://thumbs.odycdn.com/a.webp');
+    expect(stillThumbUrl('https://thumbs.odycdn.com/a.gif?x=1', 400)).toContain('/card/s:400:225/');
+    expect(stillThumbUrl('https://thumbnails.lbry.com/a.WEBP', 400)).toContain('/card/');
+  });
+
+  it('has nothing to say for files that cannot move or hosts it does not serve', () => {
+    expect(stillThumbUrl('https://thumbs.odycdn.com/a.jpg', 400)).toBeNull();
+    expect(stillThumbUrl('https://thumbs.odycdn.com/a', 400)).toBeNull();
+    expect(stillThumbUrl('https://spee.ch/a.webp', 400)).toBeNull();
+    expect(stillThumbUrl(null, 400)).toBeNull();
+    expect(stillThumbUrl(undefined, 400)).toBeNull();
+  });
 });

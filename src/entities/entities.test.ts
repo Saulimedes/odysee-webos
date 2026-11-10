@@ -18,8 +18,176 @@ describe('category entity', () => {
     expect(homepage.featured?.label).toBe('Featured');
     expect(homepage.categories.map((category) => category.id)).toEqual(['COMEDY', 'GAMING']);
     expect(homepage.categories[1]).toMatchObject({ pageSize: 12, days: 30 });
-    expect(homepage.categories[1].channelIds).toHaveLength(100);
-    expect(homepage.categories[0]).toMatchObject({ label: 'Comedy', pageSize: 20, days: 90 });
+    expect(homepage.categories[1].channelIds).toHaveLength(150);
+    expect(homepage.categories[0]).toMatchObject({ label: 'Comedy', pageSize: 20, days: 30 });
+  });
+
+  it('keeps a category without channels when Odysee names the channels to leave out, like Wild West', async () => {
+    const { parseHomepage, parseCategory } = await import('./category/api/homepage');
+    const homepage = parseHomepage(content({
+      COMEDY: { label: 'Comedy', channelIds: ['c'], sortOrder: 10 },
+      WILD_WEST: { label: 'Wild West', icon: 'WildWest', channelLimit: '1', searchLanguages: ['en'], excludedChannelIds: ['x', 'y'], sortOrder: 999, hideByDefault: true },
+      OTHER_OPEN: { label: 'Open', excludedChannelIds: ['z'], sortOrder: 500 },
+      EXPLORABLE_CHANNEL: { label: 'Discover', sortOrder: 1, channelLimit: '1' },
+    }) as never);
+    expect(homepage.categories.map((category) => category.id)).toEqual(['COMEDY']);
+    expect(homepage.open?.map((category) => category.id)).toEqual(['OTHER_OPEN', 'WILD_WEST']);
+    expect(homepage.open?.[1]).toMatchObject({ label: 'Wild West', icon: 'WildWest', channelIds: [], excludedChannelIds: ['x', 'y'], limitPerChannel: 1, languages: ['en'], days: 30, order: 'trending' });
+    expect(parseCategory('X', { channelIds: ['a'], excludedChannelIds: ['b'] })?.excludedChannelIds).toBeUndefined();
+    expect(parseCategory('X', { excludedChannelIds: [] })).toBeNull();
+  });
+
+  it('reads what Odysee asks for a category: one claim per channel, order, shorts and languages', async () => {
+    const { parseCategory } = await import('./category/api/homepage');
+    const ids = ['a', 'b'];
+    expect(parseCategory('GAMING', { channelIds: ids, channelLimit: '2', order: 'new', exclude_shorts: true, searchLanguages: ['en', 'de'], claimType: ['stream', 'repost'] })).toMatchObject({
+      limitPerChannel: 2, order: 'new', excludeShorts: true, languages: ['en', 'de'],
+    });
+    const plain = parseCategory('X', { channelIds: ids });
+    expect(plain).toMatchObject({ order: 'trending', excludeShorts: false, days: 30 });
+    expect(plain?.limitPerChannel).toBeUndefined();
+    expect(plain?.languages).toBeUndefined();
+    expect(parseCategory('X', { channelIds: ids, order: 'top' })?.order).toBe('top');
+    expect(parseCategory('X', { channelIds: ids, order: 'sideways' })?.order).toBe('trending');
+    expect(parseCategory('X', { channelIds: ids, searchLanguages: [] })?.languages).toBeUndefined();
+    expect(parseCategory('X', { channelIds: ids, exclude_shorts: false })?.excludeShorts).toBe(false);
+  });
+
+  it('reads the channel limit like Odysee does', async () => {
+    const { limitPerChannel } = await import('./category/lib/channels');
+    expect(limitPerChannel('1', 900)).toBe(1);
+    expect(limitPerChannel('3', 900)).toBe(3);
+    expect(limitPerChannel(2, 900)).toBe(2);
+    expect(limitPerChannel('2.9', 900)).toBe(2);
+    expect(limitPerChannel('0', 900)).toBeUndefined();
+    expect(limitPerChannel('many', 900)).toBeUndefined();
+    expect(limitPerChannel('', 900)).toBeUndefined();
+    expect(limitPerChannel(undefined, 900)).toBeUndefined();
+    expect(limitPerChannel('auto', 100)).toBe(3);
+    expect(limitPerChannel('auto', 200)).toBe(2);
+    expect(limitPerChannel('auto', 250)).toBe(1);
+    expect(limitPerChannel('auto', 1775)).toBe(1);
+  });
+
+  describe('channel sample', () => {
+    const ids = (count: number) => Array.from({ length: count }, (_, index) => `c${index}`);
+    const DAY = 86400000;
+
+    it('keeps short lists as they are and cuts long lists to the sample size', async () => {
+      const { sampleChannels, MAX_CHANNELS } = await import('./category/lib/channels');
+      const short = ids(MAX_CHANNELS);
+      expect(sampleChannels(short)).toBe(short);
+      expect(sampleChannels(ids(1775))).toHaveLength(MAX_CHANNELS);
+      expect(sampleChannels(ids(MAX_CHANNELS + 1))).toHaveLength(MAX_CHANNELS);
+    });
+
+    it('is the same all day for everyone and moves on a full window each day, wrapping around the end', async () => {
+      const { sampleChannels } = await import('./category/lib/channels');
+      const list = ids(700);
+      const today = 20000 * DAY;
+      expect(sampleChannels(list, today + 5)).toEqual(sampleChannels(list, today + DAY - 1));
+      const first = sampleChannels(list, today, 300);
+      const second = sampleChannels(list, today + DAY, 300);
+      const third = sampleChannels(list, today + 2 * DAY, 300);
+      expect(second[0]).not.toBe(first[0]);
+      [first, second, third].forEach((window) => {
+        expect(new Set(window).size).toBe(300);
+        const at = list.indexOf(window[0]);
+        window.forEach((id, index) => expect(id).toBe(list[(at + index) % list.length]));
+      });
+    });
+
+    it('lets every channel of a long list have its turn within a few days', async () => {
+      const { sampleChannels } = await import('./category/lib/channels');
+      const list = ids(1775);
+      const seen = new Set<string>();
+      for (let day = 0; day < 6; day++) sampleChannels(list, (20000 + day) * DAY).forEach((id) => seen.add(id));
+      expect(seen.size).toBe(1775);
+    });
+
+    it('samples the long lists of the homepage', async () => {
+      const { parseHomepage } = await import('./category/api/homepage');
+      const homepage = parseHomepage(content({ GAMING: { channelIds: ids(1775), channelLimit: '1' }, SPOOKY: { channelIds: ids(115) } }) as never);
+      const gaming = homepage.categories.find((category) => category.id === 'GAMING');
+      expect(gaming?.channelIds).toHaveLength(300);
+      expect(parseHomepage(content({ A: { channelIds: ids(1775), channelLimit: 'auto' } }) as never).categories[0].limitPerChannel).toBe(1);
+      expect(homepage.categories.find((category) => category.id === 'SPOOKY')?.channelIds).toHaveLength(115);
+    });
+
+    it('keeps the cached homepage of the biggest languages small enough to be persisted', async () => {
+      const { refreshHomepage } = await import('./category/api/homepage');
+      const categories = Object.fromEntries(Array.from({ length: 17 }, (_, index) => [
+        `CAT${index}`, { label: `Category ${index}`, icon: 'Gaming', channelIds: Array.from({ length: 1200 }, (__, id) => `${String(index).padStart(2, '0')}${String(id).padStart(4, '0')}`.padEnd(40, 'f')), sortOrder: index, channelLimit: '1', exclude_shorts: true, searchLanguages: ['en'] },
+      ]));
+      mockFetch(() => content(categories));
+      await refreshHomepage(true);
+      const stored = localStorage.getItem('cache:homepage');
+      expect(stored).not.toBeNull();
+      expect((stored as string).length).toBeLessThan(250000);
+    });
+  });
+
+  it('reads the homepage of another language and falls back to English', async () => {
+    const { parseHomepage } = await import('./category/api/homepage');
+    const response = { status: 'success', data: {
+      en: { categories: { GAMING: { label: 'Gaming', channelIds: ['a'], sortOrder: 1 } } },
+      de: { categories: { SPIELE: { label: 'Spiele', channelIds: ['b'], sortOrder: 1 } } },
+    } };
+    expect(parseHomepage(response as never, 'de').categories.map((category) => category.label)).toEqual(['Spiele']);
+    expect(parseHomepage(response as never, 'cs').categories.map((category) => category.label)).toEqual(['Gaming']);
+    expect(parseHomepage(response as never).categories.map((category) => category.label)).toEqual(['Gaming']);
+  });
+
+  it('picks the homepage language from the setting, or from the app language', async () => {
+    const { homepageLanguage } = await import('./category/api/homepage');
+    const { setSetting } = await import('@/shared/config');
+    setSetting('uiLanguage', 'en');
+    expect(homepageLanguage()).toBe('en');
+    setSetting('uiLanguage', 'de');
+    expect(homepageLanguage()).toBe('de');
+    setSetting('uiLanguage', 'pt');
+    expect(homepageLanguage()).toBe('pt-BR');
+    setSetting('homepageLanguage', 'ru');
+    expect(homepageLanguage()).toBe('ru');
+    setSetting('homepageLanguage', 'auto');
+    setSetting('uiLanguage', 'auto');
+  });
+
+  it('switches the homepage language, showing cached rows first, and keeps the English cache key', async () => {
+    const response = (label: string, id: string) => ({ status: 'success', data: {
+      en: { categories: { GAMING: { label: 'Gaming', channelIds: ['a'], sortOrder: 1 } } },
+      de: { categories: { SPIELE: { label: label, channelIds: ['b'], sortOrder: 1 } } },
+    }, id });
+    const spy = mockFetch(() => response('Spiele', 'x'));
+    const { refreshHomepage, switchHomepageLanguage } = await import('./category/api/homepage');
+    const { setSetting } = await import('@/shared/config');
+    setSetting('uiLanguage', 'en');
+    expect((await refreshHomepage(true))?.categories[0].label).toBe('Gaming');
+    expect(localStorage.getItem('cache:homepage')).not.toBeNull();
+    setSetting('homepageLanguage', 'de');
+    const german = await switchHomepageLanguage();
+    expect(german?.categories[0].label).toBe('Spiele');
+    expect(localStorage.getItem('cache:homepage:de')).not.toBeNull();
+    const calls = spy.mock.calls.length;
+    setSetting('homepageLanguage', 'en');
+    const english = switchHomepageLanguage();
+    expect((await english)?.categories[0].label).toBe('Gaming');
+    expect(spy.mock.calls.length).toBe(calls);
+    setSetting('homepageLanguage', 'auto');
+  });
+
+  it('ignores a slow answer for a language that is no longer chosen', async () => {
+    let release: (value: unknown) => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { release = resolve; })));
+    const { refreshHomepage, useHomepageFailed } = await import('./category/api/homepage');
+    const { setSetting } = await import('@/shared/config');
+    setSetting('homepageLanguage', 'de');
+    const pending = refreshHomepage(true);
+    setSetting('homepageLanguage', 'en');
+    release(new Response(JSON.stringify({ status: 'error' })));
+    expect(await pending).toBeNull();
+    expect(typeof useHomepageFailed).toBe('function');
+    setSetting('homepageLanguage', 'auto');
   });
 
   it('rejects failed responses', async () => {
@@ -49,13 +217,42 @@ describe('category entity', () => {
     expect((await refreshHomepage())?.categories[0].id).toBe('X');
   });
 
-  it('maps category icons by label and by icon name', async () => {
+  it('maps category icons by the name Odysee gives them, then by label', async () => {
     const { categoryIcon } = await import('./category/lib/icon');
+    expect(categoryIcon({ label: 'Tech', icon: 'Speaker' })).toBe('Speaker');
+    expect(categoryIcon({ label: 'Cultura Pop', icon: 'Pop Culture' })).toBe('Pop Culture');
+    expect(categoryIcon({ label: 'Whatever', icon: 'PopCulture' })).toBe('Pop Culture');
+    expect(categoryIcon({ label: 'Whatever', icon: 'MusicCategory' })).toBe('MusicCategory');
     expect(categoryIcon({ label: 'Gaming', icon: '' })).toBe('Gaming');
-    expect(categoryIcon({ label: 'Tech', icon: 'Speaker' })).toBe('Tech');
-    expect(categoryIcon({ label: 'Whatever', icon: 'Cheese' })).toBe('Cheese');
-    expect(categoryIcon({ label: 'Whatever', icon: 'Music' })).toBe('Music');
+    expect(categoryIcon({ label: 'Pop Culture', icon: '' })).toBe('Pop Culture');
+    expect(categoryIcon({ label: 'Discover', icon: '' })).toBe('MindBlown');
+    expect(categoryIcon({ label: 'Tech', icon: 'nope' })).toBe('Speaker');
+    expect(categoryIcon({ label: 'Whatever', icon: 'Cheese' })).toBeNull();
     expect(categoryIcon({ label: 'Whatever', icon: 'nope' })).toBeNull();
+    expect(categoryIcon({ label: 'constructor', icon: 'constructor' })).toBeNull();
+  });
+
+  it('finds an icon for every category of the Odysee homepage', async () => {
+    const { parseHomepage } = await import('./category/api/homepage');
+    const { categoryIcon } = await import('./category/lib/icon');
+    const odysee: Array<[string, string, string]> = [
+      ['PRIMARY_CONTENT', 'Featured', 'Featured'], ['EXPLORABLE_CHANNEL', 'Discover', 'MindBlown'], ['GAMING', 'Gaming', 'Gaming'],
+      ['COMEDY', 'Comedy', 'Comedy'], ['POP_CULTURE', 'Pop Culture', 'Pop Culture'], ['EDUCATION', 'Education', 'Education'],
+      ['MUSIC', 'Music', 'MusicCategory'], ['SPORTS', 'Sports', 'Sports'], ['TECHNOLOGY', 'Tech', 'Speaker'],
+      ['NEWS_AND_POLITICS', 'News & Politics', 'Aperature'], ['FINANCE', 'Finance 2.0', 'DollarSign'], ['ART', 'Artists', 'Artists'],
+      ['LIFESTYLE', 'Lifestyle', 'Lifestyle'], ['SPOOKY', 'Spooky', 'Horror'], ['UNIVERSE', 'Universe', 'Universe'],
+      ['WILD_WEST', 'Wild West', 'WildWest'], ['SPIRITUALITY', 'Spirituality', 'Spirituality'], ['OUTDOOR', 'Outdoor', 'Life'],
+      ['PEACE', 'Peace', 'Peace'],
+    ];
+    const categories = odysee.reduce<Record<string, unknown>>((all, [id, label, icon], index) => ({ ...all, [id]: { label, icon, channelIds: ['a'], sortOrder: index + 1 } }), {});
+    const homepage = parseHomepage(content(categories) as never);
+    const parsed = [homepage.featured, ...homepage.categories];
+    expect(parsed).toHaveLength(odysee.length);
+    parsed.forEach((category) => {
+      const wanted = odysee.find(([id]) => id === category?.id) as [string, string, string];
+      expect(categoryIcon(category as never)).toBe(wanted[2]);
+      expect(categoryIcon({ label: category?.label as string, icon: '' }), `by the label ${wanted[1]}`).not.toBeNull();
+    });
   });
 });
 

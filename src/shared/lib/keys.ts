@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { releasePointer } from './pointer';
 
 type Handler = (event: KeyboardEvent) => boolean | void;
 interface Layer { priority: number; order: number; handler: Handler }
@@ -8,6 +9,8 @@ let counter = 0;
 let attached = false;
 
 function dispatch(event: KeyboardEvent) {
+  // React renders right after the first handler, so the pointer is released before any handler runs
+  releasePointer();
   const sorted = Array.from(layers).sort((a, b) => b.priority - a.priority || b.order - a.order);
   for (const layer of sorted) {
     if (layer.handler(event) === true) {
@@ -38,5 +41,3 @@ export function useKeys(handler: Handler, { enabled = true, priority = PRIORITY.
     return () => { layers.delete(layer); };
   }, [enabled, priority]);
 }
-
-export const isTextField = (element: Element | null) => element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement;

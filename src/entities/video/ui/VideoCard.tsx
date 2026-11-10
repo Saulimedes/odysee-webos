@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Avatar, Thumb } from '@/shared/ui';
-import { formatDuration, formatRelativeTime } from '@/shared/lib';
+import { formatDuration, formatRelativeTime, pointerMoved } from '@/shared/lib';
 import type { Video } from '../model/types';
 
 interface Props {
@@ -10,13 +10,18 @@ interface Props {
   thumbWidth: number;
   progress?: number;
   onSelect: (index: number) => void;
+  onHover?: (index: number) => void;
 }
 
-export const VideoCard = memo(function VideoCard({ video, index, active, thumbWidth, progress = 0, onSelect }: Props) {
+export const VideoCard = memo(function VideoCard({ video, index, active, thumbWidth, progress = 0, onSelect, onHover }: Props) {
   return (
-    <div className={`card${active ? ' card--active' : ''}`} onClick={() => onSelect(index)}>
+    <div
+      className={`card${active ? ' card--active' : ''}`}
+      onClick={() => onSelect(index)}
+      onMouseMove={onHover ? (event) => { if (pointerMoved(event)) onHover(index); } : undefined}
+    >
       <div className="card__thumb">
-        <Thumb src={video.thumb} width={thumbWidth} />
+        <Thumb src={video.thumb} width={thumbWidth} focused={active} />
         {video.duration > 0 && <span className="card__duration">{formatDuration(video.duration)}</span>}
         {progress > 0 && <div className="card__progress"><i style={{ width: `${Math.min(100, progress)}%` }} /></div>}
       </div>

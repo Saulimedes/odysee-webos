@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from '@/shared/i18n';
 import { isLoggedIn } from '@/entities/session';
 import { syncCollections } from '@/features/collections';
 import { VideoGrid } from '@/widgets/item-grid';
@@ -6,6 +7,7 @@ import { SECTIONS, type SectionId } from './sections';
 import { useSectionVideos } from './useSectionVideos';
 
 export function ListPage({ section }: { section: SectionId }) {
+  const t = useTranslation();
   const { videos, progress } = useSectionVideos();
   const config = SECTIONS.find((candidate) => candidate.id === section) ?? SECTIONS[0];
 
@@ -18,10 +20,10 @@ export function ListPage({ section }: { section: SectionId }) {
   return (
     <VideoGrid
       stateKey={`list:${section}`}
-      title={config.title}
+      title={t(config.title)}
       videos={videos[section] ?? []}
-      emptyTitle={config.emptyTitle}
-      emptyHint={config.emptyHint}
+      emptyTitle={t(config.emptyTitle)}
+      emptyHint={t(config.emptyHint)}
       emptyIcon={config.icon}
       progress={progress}
     />

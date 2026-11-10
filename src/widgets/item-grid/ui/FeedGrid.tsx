@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import type { Video } from '@/entities/video';
-import { usePagedFeed } from '../model/usePagedFeed';
+import { usePagedFeed, type FirstPage } from '../model/usePagedFeed';
 import { VideoGrid } from './VideoGrid';
 
 interface Props {
   feedKey: string;
   fetchPage: (page: number) => Promise<Video[]>;
   pageSize: number;
+  firstPage?: FirstPage;
   title?: string;
   subtitle?: string;
   emptyTitle: string;
@@ -19,8 +20,8 @@ interface Props {
   height?: number;
 }
 
-export function FeedGrid({ feedKey, fetchPage, pageSize, ...rest }: Props) {
-  const feed = usePagedFeed(feedKey, fetchPage, pageSize);
+export function FeedGrid({ feedKey, fetchPage, pageSize, firstPage, ...rest }: Props) {
+  const feed = usePagedFeed(feedKey, fetchPage, pageSize, firstPage);
   return (
     <VideoGrid
       {...rest}

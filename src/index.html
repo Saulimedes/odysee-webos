@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <title>Odysee</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="icon" type="image/png" sizes="96x96" href="./favicon.png" />
+    <link rel="apple-touch-icon" href="./favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1" />
     <link rel="preconnect" href="https://api.lbry.tv" crossorigin />
     <link rel="preconnect" href="https://thumbnails.odycdn.com" crossorigin />
@@ -21,24 +24,37 @@
       })();
     </script>
     <style>
-      :root { --bg: #000; --text: #fff; --accent: #de0050; }
+      :root {
+        --bg: #000; --text: #fff; --accent: #de0050;
+        --bg-rgb: 0, 0, 0; --text-rgb: 255, 255, 255; --accent-rgb: 222, 0, 80; --accent-contrast: #fff;
+      }
       html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
-      #boot { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2147483647; background: var(--bg); }
-      #boot img { position: absolute; top: 50%; left: 50%; width: 220px; margin: -50px 0 0 -110px; }
+      #boot {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 2147483647;
+        background: var(--bg); transition: opacity 0.35s ease-out; --boot-scale: 2.4;
+      }
+      #boot.fade-out { opacity: 0; pointer-events: none; }
       #boot pre { margin: 0; padding: 40px 60px; white-space: pre-wrap; word-break: break-word; font: 20px/1.5 monospace; color: var(--text); }
+      <!--LOADER_CSS-->
+      <!--CANVAS_CSS-->
+      html[data-theme='ambient'] #boot { background: var(--canvas), var(--bg); }
     </style>
   </head>
   <body>
     <div id="app"></div>
-    <div id="boot"><img src="odysee_text.png" alt="Odysee" /></div>
+    <div id="boot"><div class="loading-spinner loader-odysee"></div></div>
     <script>
       (function () {
         var ready = false;
+        var started = false;
         var boot = document.getElementById('boot');
+        boot.firstChild.innerHTML = <!--LOADER_MARKUP-->;
+
         window.__odyseeReady = function () {
           if (ready) return;
           ready = true;
-          if (boot.parentNode) boot.parentNode.removeChild(boot);
+          boot.className = 'fade-out';
+          setTimeout(function () { if (boot.parentNode) boot.parentNode.removeChild(boot); }, 400);
         };
         function fail(message) {
           if (ready || document.getElementById('app').firstChild) return;
@@ -49,7 +65,10 @@
         window.addEventListener('unhandledrejection', function (event) {
           fail(String(event.reason && (event.reason.stack || event.reason.message || event.reason)));
         });
+
         function loadBundles() {
+          if (started) return;
+          started = true;
           ['./vendor.bundle.js', './app.bundle.js'].forEach(function (src) {
             var script = document.createElement('script');
             script.async = false;

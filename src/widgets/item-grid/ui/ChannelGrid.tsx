@@ -27,7 +27,7 @@ export function ChannelGrid({ channels, onSelect, ...rest }: Props) {
       emptyIcon={<IconUsers size={64} />}
       getKey={(channel) => channel.id}
       onSelect={(channel) => onSelect(channel)}
-      renderItem={(channel, index, active, pick) => <ChannelCard channel={channel} index={index} active={active} onSelect={pick} />}
+      renderItem={(channel, index, active, pick, hover) => <ChannelCard channel={channel} index={index} active={active} onSelect={pick} onHover={hover} />}
     />
   );
 }

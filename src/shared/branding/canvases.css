@@ -1,0 +1,5 @@
+html[data-theme='ambient'] {
+  --canvas:
+    radial-gradient(circle at 85% 15%, rgba(var(--accent-rgb), 0.3) 0%, rgba(var(--accent-rgb), 0.1) 35%, transparent 70%),
+    radial-gradient(circle at 15% 85%, rgba(var(--accent-rgb), 0.3) 0%, rgba(var(--accent-rgb), 0.1) 35%, transparent 70%);
+}

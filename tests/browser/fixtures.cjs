@@ -38,7 +38,9 @@ function fixture(url, postData = '', method = 'GET') {
   const parsed = new URL(url);
   const json = (body) => ({ contentType: 'application/json', body: JSON.stringify(body) });
   if (method === 'OPTIONS') return { status: 204, contentType: 'text/plain', body: '' };
-  if (parsed.hostname === 'cdn.lbryplayer.xyz') return { contentType: 'video/webm', body: fs.readFileSync(path.join(__dirname, 'fixture.webm')) };
+  const stream = () => ({ contentType: 'video/webm', body: fs.readFileSync(path.join(__dirname, 'fixture.webm')) });
+  if (parsed.hostname === 'odysee.com' && parsed.pathname.startsWith('/$/download/')) return stream();
+  if (parsed.hostname === 'cdn.lbryplayer.xyz') return stream();
   if (parsed.hostname === 'thumbs.odycdn.com' || parsed.hostname === 'thumbnails.odycdn.com' || parsed.hostname === 'thumbnails.lbry.com') {
     return { contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="blue"/></svg>' };
   }

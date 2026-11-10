@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import { CARD_GAP, KEY, PAGE_PADDING, SIDEBAR_WIDTH, rowCardMetrics, rowHeight, useSetting } from '@/shared/config';
-import { PRIORITY, useKeys, useNav, useRemembered } from '@/shared/lib';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CARD_GAP, KEY, PAGE_PADDING, SIDEBAR_WIDTH, rowCardMetrics, rowHeight, useSetting, type CardMetrics } from '@/shared/config';
+import { PRIORITY, isPointerDriven, useKeys, useNav, useRemembered } from '@/shared/lib';
 import { OdyseeIcon } from '@/shared/ui';
 import { VideoCard, type Video } from '@/entities/video';
 
@@ -26,6 +26,9 @@ interface Props {
 
 const ROWS_BEFORE = 1;
 const ROWS_AFTER = 2;
+const BUFFER_CARDS = 3;
+const ROW_TOP = 24;
+const SETTLE_MS = 2500;
 
 function Skeleton({ count, width, height }: { count: number; width: number; height: number }) {
   const cells = [];
@@ -34,6 +37,60 @@ function Skeleton({ count, width, height }: { count: number; width: number; heig
   }
   return <>{cells}</>;
 }
+
+interface RowViewProps {
+  entry: VideoRow;
+  selected: number;
+  scroll: number;
+  active: boolean;
+  top: number;
+  rowH: number;
+  step: number;
+  metrics: CardMetrics;
+  viewportCards: number;
+  settled: boolean;
+  onPick: (rowId: string, index: number) => void;
+  onHover: (rowId: string, index: number) => void;
+}
+
+const RowView = memo(function RowView({ entry, selected, scroll, active, top, rowH, step, metrics, viewportCards, settled, onPick, onHover }: RowViewProps) {
+  const onSelect = useCallback((index: number) => onPick(entry.id, index), [onPick, entry.id]);
+  const onPoint = useCallback((index: number) => onHover(entry.id, index), [onHover, entry.id]);
+  const offset = Math.max(0, scroll - 1) * step;
+  const buffer = settled ? BUFFER_CARDS : 0;
+  const from = Math.max(0, scroll - (settled ? BUFFER_CARDS : 1));
+  const to = Math.min(entry.videos.length, scroll + viewportCards + buffer);
+  const cards = [];
+  for (let index = from; index < to; index++) {
+    const video = entry.videos[index];
+    cards.push(
+      <div key={video.id} className="rowCell" style={{ width: metrics.width, height: metrics.height, transform: `translate3d(${index * step}px,0,0)` }}>
+        <VideoCard
+          video={video}
+          index={index}
+          active={active && index === selected}
+          thumbWidth={metrics.width}
+          progress={entry.progress?.(video)}
+          onSelect={onSelect}
+          onHover={onPoint}
+        />
+      </div>,
+    );
+  }
+  return (
+    <div className={`videoRow${active ? ' videoRow--active' : ''}`} style={{ height: rowH, transform: `translate3d(0, ${top}px, 0)` }}>
+      <h2 className="videoRow__title">
+        {entry.icon && <OdyseeIcon name={entry.icon} size={36} follow />}
+        {entry.title}
+      </h2>
+      <div className="videoRow__viewport" style={{ height: metrics.height + 24 }}>
+        <div className="videoRow__track" style={{ width: Math.max(1, entry.videos.length) * step, transform: `translate3d(${-offset}px,0,0)` }}>
+          {entry.videos.length === 0 ? <Skeleton count={viewportCards} width={metrics.width} height={metrics.height} /> : cards}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge, onTopEdge, enabled = true }: Props) {
   const nav = useNav<Video>();
@@ -53,6 +110,20 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
   const setActiveRow = (at: number) => setActiveId(present[at].id);
   const rowIndex = row ? Math.min(indexes[row.id] || 0, Math.max(0, row.videos.length - 1)) : 0;
 
+  const [settled, setSettled] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const hasCards = present.some((entry) => entry.videos.length > 0);
+  const checkImages = useCallback(() => {
+    const images = root.current ? Array.from(root.current.getElementsByTagName('img')) : [];
+    if (images.every((image) => image.complete)) setSettled(true);
+  }, []);
+  useEffect(() => {
+    if (settled || !hasCards) return undefined;
+    checkImages();
+    const timer = setTimeout(() => setSettled(true), SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [settled, hasCards, checkImages]);
+
   const rowId = row?.id;
   useEffect(() => {
     if (rowId) onActiveRow?.(rowId);
@@ -71,8 +142,26 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
 
   const setColumn = (id: string, value: number) => setIndexes((previous) => ({ ...previous, [id]: value }));
 
+  const pickRef = useRef<(rowId: string, index: number) => void>(() => undefined);
+  pickRef.current = (rowId, index) => {
+    const at = present.findIndex((candidate) => candidate.id === rowId);
+    if (at < 0) return;
+    setActiveRow(at);
+    setColumn(rowId, index);
+    if (present[at].videos[index]) nav.play(present[at].videos[index]);
+  };
+
+  const hoverRef = useRef<(rowId: string, index: number) => void>(() => undefined);
+  hoverRef.current = (rowId, index) => {
+    const at = present.findIndex((candidate) => candidate.id === rowId);
+    if (at < 0) return;
+    if (at !== activeRow) setActiveRow(at);
+    if ((indexes[rowId] || 0) !== index) setColumn(rowId, index);
+  };
+
   useKeys((event) => {
     if (!row) return false;
+    if (!settled) setSettled(true);
     switch (event.keyCode) {
       case KEY.UP: moveRow(-1); return true;
       case KEY.DOWN: moveRow(1); return true;
@@ -90,53 +179,50 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
     }
   }, { enabled: enabled && !nav.sidebarFocused, priority: PRIORITY.content });
 
-  const first = Math.max(0, activeRow - ROWS_BEFORE);
-  const last = Math.min(present.length - 1, activeRow + ROWS_AFTER);
+  const pick = useCallback((rowId: string, index: number) => pickRef.current(rowId, index), []);
+  const hover = useCallback((rowId: string, index: number) => hoverRef.current(rowId, index), []);
+  const visibleRows = Math.max(1, Math.floor((window.innerHeight - ROW_TOP) / rowH));
+  // The cursor must not scroll: content would slide under it and the next card would be picked
+  const viewRow = useRef(activeRow);
+  const pointer = isPointerDriven();
+  if (!(pointer && activeRow >= viewRow.current && activeRow < viewRow.current + visibleRows)) viewRow.current = activeRow;
+  const scrolls = useRef<Record<string, number>>({});
+  const first = Math.max(0, viewRow.current - ROWS_BEFORE);
+  const last = Math.min(present.length - 1, viewRow.current + (settled ? ROWS_AFTER : visibleRows - 1));
   const rendered = [];
   for (let at = first; at <= last; at++) {
     const entry = present[at];
     const selected = Math.min(indexes[entry.id] || 0, Math.max(0, entry.videos.length - 1));
-    const offset = Math.max(0, selected - 1) * step;
-    const from = Math.max(0, selected - 3);
-    const to = Math.min(entry.videos.length, selected + viewportCards + 3);
-    const cards = [];
-    for (let index = from; index < to; index++) {
-      const video = entry.videos[index];
-      cards.push(
-        <div key={video.id} className="rowCell" style={{ width: metrics.width, height: metrics.height, transform: `translate3d(${index * step}px,0,0)` }}>
-          <VideoCard
-            video={video}
-            index={index}
-            active={enabled && at === activeRow && index === selected}
-            thumbWidth={metrics.width}
-            progress={entry.progress?.(video)}
-            onSelect={(picked) => { setActiveRow(at); setColumn(entry.id, picked); nav.play(entry.videos[picked]); }}
-          />
-        </div>,
-      );
-    }
+    const kept = scrolls.current[entry.id];
+    if (!(pointer && kept !== undefined && selected >= Math.max(0, kept - 1) && selected <= kept + viewportCards - 3)) scrolls.current[entry.id] = selected;
     rendered.push(
-      <div key={entry.id} className="videoRow" style={{ height: rowH, transform: `translate3d(0, ${at * rowH}px, 0)` }}>
-        <h2 className="videoRow__title">
-          {entry.icon && <OdyseeIcon name={entry.icon} size={36} />}
-          {entry.title}
-        </h2>
-        <div className="videoRow__viewport" style={{ height: metrics.height + 24 }}>
-          <div className="videoRow__track" style={{ width: Math.max(1, entry.videos.length) * step, transform: `translate3d(${-offset}px,0,0)` }}>
-            {entry.videos.length === 0 ? <Skeleton count={viewportCards} width={metrics.width} height={metrics.height} /> : cards}
-          </div>
-        </div>
-      </div>,
+      <RowView
+        key={entry.id}
+        entry={entry}
+        selected={selected}
+        scroll={scrolls.current[entry.id]}
+        active={enabled && at === activeRow}
+        top={at * rowH}
+        rowH={rowH}
+        step={step}
+        metrics={metrics}
+        viewportCards={viewportCards}
+        settled={settled}
+        onPick={pick}
+        onHover={hover}
+      />,
     );
   }
 
   return (
     <div
+      ref={root}
       className="videoRows"
       style={{ paddingLeft: PAGE_PADDING }}
-      onWheel={(event) => moveRow(event.deltaY > 0 ? 1 : -1)}
+      onLoadCapture={settled ? undefined : checkImages}
+      onErrorCapture={settled ? undefined : checkImages}
     >
-      <div className="videoRows__inner" style={{ height: present.length * rowH, transform: `translate3d(0, ${-activeRow * rowH}px, 0)` }}>
+      <div className="videoRows__inner" style={{ height: present.length * rowH, transform: `translate3d(0, ${-viewRow.current * rowH}px, 0)` }}>
         {rendered}
       </div>
     </div>

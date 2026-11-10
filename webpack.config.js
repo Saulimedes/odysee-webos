@@ -1,7 +1,17 @@
 const path = require('path');
 const webpack = require('webpack');
 const CopyPlugin = require('copy-webpack-plugin');
+const { injectBoot, BOOT_FILES } = require('./tools/index-html');
+const { execSync } = require('child_process');
 const appInfo = require('./assets/appinfo.json');
+
+function buildCommit() {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return '';
+  }
+}
 
 module.exports = {
   entry: {
@@ -56,15 +66,23 @@ module.exports = {
     },
   },
   plugins: [
+    {
+      apply: (compiler) => compiler.hooks.thisCompilation.tap('BootFiles', (compilation) => {
+        BOOT_FILES.forEach((file) => compilation.fileDependencies.add(file));
+      }),
+    },
     new webpack.DefinePlugin({
       APP_VERSION: JSON.stringify(appInfo.version),
       APP_ID: JSON.stringify(appInfo.id),
+      APP_COMMIT: JSON.stringify(buildCommit()),
+      DEV_SERVER: JSON.stringify(process.env.WEBPACK_SERVE === 'true'),
     }),
     new CopyPlugin({
       patterns: [
         { context: 'assets', from: '**/*' },
+        { context: 'src/shared/branding', from: 'odysee-logo.png' },
         { context: 'src/app/styles/fonts', from: '*.{txt,md}', to: 'fonts' },
-        { context: 'src', from: 'index.html' },
+        { context: 'src', from: 'index.html', transform: (content) => injectBoot(content.toString()) },
       ],
     }),
   ],
@@ -72,7 +90,7 @@ module.exports = {
     static: path.resolve(__dirname, './dist'),
     port: 3333,
     proxy: [
-      { context: ['/lbry-api'], target: 'https://api.lbry.tv', pathRewrite: { '^/lbry-api': '' }, changeOrigin: true, secure: true },
+      { context: ['/lbry-tv'], target: 'https://api.lbry.tv', pathRewrite: { '^/lbry-tv': '' }, changeOrigin: true, secure: true },
       { context: ['/odysee-proxy'], target: 'https://api.na-backend.odysee.com', pathRewrite: { '^/odysee-proxy': '' }, changeOrigin: true, secure: true },
       { context: ['/lbry-api-com'], target: 'https://api.lbry.com', pathRewrite: { '^/lbry-api-com': '' }, changeOrigin: true, secure: true },
     ],

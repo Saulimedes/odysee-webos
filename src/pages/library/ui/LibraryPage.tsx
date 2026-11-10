@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { IconHistory } from '@tabler/icons-react';
 import { KEY } from '@/shared/config';
-import { PRIORITY, thumbUrl, useKeys, useNav, useRemembered } from '@/shared/lib';
+import { PRIORITY, pointerMoved, thumbUrl, useKeys, useNav, useRemembered } from '@/shared/lib';
+import { useTranslation } from '@/shared/i18n';
 import { EmptyState, PageTitle } from '@/shared/ui';
 import { VideoRows, type VideoRow } from '@/widgets/video-rows';
 import { SECTIONS } from './sections';
@@ -10,6 +11,7 @@ import { useSectionVideos } from './useSectionVideos';
 const PREVIEW = 10;
 
 export function LibraryPage() {
+  const t = useTranslation();
   const nav = useNav<unknown>();
   const { videos, progress } = useSectionVideos();
   const [zone, setZone] = useRemembered<'cards' | 'rows'>('library:zone', 'cards');
@@ -17,8 +19,8 @@ export function LibraryPage() {
 
   const sections = useMemo(() => SECTIONS.filter((section) => videos[section.id].length > 0), [videos]);
   const rows = useMemo<VideoRow[]>(() => sections.map((section) => ({
-    id: section.id, title: section.title, videos: videos[section.id].slice(0, PREVIEW), status: 'ready', progress,
-  })), [sections, videos, progress]);
+    id: section.id, title: t(section.title), videos: videos[section.id].slice(0, PREVIEW), status: 'ready', progress,
+  })), [sections, videos, progress, t]);
   const index = Math.min(cardIndex, Math.max(0, sections.length - 1));
   const cardsActive = zone === 'cards' && !nav.sidebarFocused;
 
@@ -38,16 +40,16 @@ export function LibraryPage() {
   if (sections.length === 0) {
     return (
       <div className="page">
-        <PageTitle>Library</PageTitle>
-        <EmptyState icon={<IconHistory size={80} />} title="Your library is empty" hint="Videos you watch, save, or favorite will appear here" />
+        <PageTitle>{t('Library')}</PageTitle>
+        <EmptyState icon={<IconHistory size={80} />} title={t('Your library is empty')} hint={t('Videos you watch, save, or favorite will appear here')} />
       </div>
     );
   }
 
   return (
     <div className="page">
-      <PageTitle>Library</PageTitle>
-      <div className="libraryCards">
+      <PageTitle>{t('Library')}</PageTitle>
+      <div className="libraryCards" onMouseMove={(event) => { if (zone !== 'cards' && pointerMoved(event)) setZone('cards'); }}>
         {sections.map((section, position) => {
           const first = videos[section.id][0];
           return (
@@ -55,19 +57,20 @@ export function LibraryPage() {
               key={section.id}
               className={`libraryCard${cardsActive && position === index ? ' libraryCard--active' : ''}`}
               onClick={() => nav.go(section.id)}
+              onMouseMove={(event) => { if (position !== index && pointerMoved(event)) setCardIndex(position); }}
             >
               <div className="libraryCard__thumb">
                 {first?.thumb ? <img src={thumbUrl(first.thumb, 280) as string} alt="" /> : section.icon}
               </div>
-              <div>
-                <div className="libraryCard__title">{section.title}</div>
-                <div className="libraryCard__count">{section.id === 'history' ? 'Your watch history' : `${videos[section.id].length} video${videos[section.id].length === 1 ? '' : 's'}`}</div>
+              <div className="libraryCard__text">
+                <div className="libraryCard__title">{t(section.title)}</div>
+                <div className="libraryCard__count">{section.id === 'history' ? t('Your watch history') : t('{count} video|{count} videos', { count: videos[section.id].length })}</div>
               </div>
             </div>
           );
         })}
       </div>
-      <div className="libraryRows">
+      <div className="libraryRows" onMouseMove={(event) => { if (zone !== 'rows' && pointerMoved(event)) setZone('rows'); }}>
         <VideoRows
           stateKey="library"
           rows={rows}

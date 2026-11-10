@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { IconClock, IconLock, IconPlaylist, IconStar, IconWorld } from '@tabler/icons-react';
+import { useTranslation } from '@/shared/i18n';
 import { EmptyState } from '@/shared/ui';
 import { resolveVideos } from '@/entities/video';
 import { useSession } from '@/entities/session';
@@ -15,6 +16,7 @@ const BUILT_IN = [
 const REMOTE_PAGE = 1000;
 
 export function PlaylistsPage() {
+  const t = useTranslation();
   const { user } = useSession();
   const lists = useCollections();
   const [remote, setRemote] = useState<Playlist[] | null>(null);
@@ -24,22 +26,22 @@ export function PlaylistsPage() {
   }, [user]);
 
   const entries = useMemo<MasterEntry[]>(() => [
-    ...BUILT_IN.map((entry) => ({ id: entry.id, label: entry.label, icon: entry.icon })),
+    ...BUILT_IN.map((entry) => ({ id: entry.id, label: t(entry.label), icon: entry.icon })),
     ...(remote || []).map((playlist) => ({ id: playlist.id, label: playlist.name, icon: playlist.published ? <IconWorld size={40} /> : <IconLock size={40} /> })),
-  ], [remote]);
+  ], [remote, t]);
 
-  if (!user) return <EmptyState icon={<IconPlaylist size={64} />} title="Login to see your playlists" />;
+  if (!user) return <EmptyState icon={<IconPlaylist size={64} />} title={t('Login to see your playlists')} />;
 
   return (
     <MasterDetail
       stateKey="playlists"
-      title="Playlists"
+      title={t('Playlists')}
       entries={entries}
       loading={remote === null}
-      emptyTitle="No playlists yet"
+      emptyTitle={t('No playlists yet')}
       emptyIcon={<IconPlaylist size={64} />}
       renderDetail={(entry, context) => {
-        const common = { title: entry.label, emptyTitle: 'This playlist is empty', emptyIcon: <IconPlaylist size={64} />, enabled: context.enabled, onLeftEdge: context.leaveToList, width: context.width, height: context.height };
+        const common = { title: entry.label, emptyTitle: t('This playlist is empty'), emptyIcon: <IconPlaylist size={64} />, enabled: context.enabled, onLeftEdge: context.leaveToList, width: context.width, height: context.height };
         if (entry.id === 'watchLater' || entry.id === 'favorites') {
           return <VideoGrid key={entry.id} stateKey={`playlist:${entry.id}`} videos={lists[entry.id]} {...common} />;
         }

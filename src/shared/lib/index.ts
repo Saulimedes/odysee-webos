@@ -1,10 +1,14 @@
 export { readJson, writeJson, removeKey } from './storage';
-export { useKeys, isTextField, PRIORITY } from './keys';
+export { useKeys, PRIORITY } from './keys';
+export { isTextField } from './textField';
 export { formatDuration, formatRelativeTime } from './format';
 export { useRemembered } from './remember';
 export { NavContext, useNav } from './nav';
 export type { NavApi } from './nav';
 export { useDebounced } from './hooks';
 export { createStore } from './store';
-export { thumbUrl } from './image';
+export { stillThumbUrl, thumbUrl } from './image';
 export { useGridNav } from './gridNav';
+export { cycle } from './cycle';
+export { isPointerDriven, pointerMoved, useWheelNavigation } from './pointer';
+export { applyOutputWindow, applyPlayRate, isWebOS, usesOutputWindow } from './webos';

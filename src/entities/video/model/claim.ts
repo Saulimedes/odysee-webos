@@ -17,6 +17,8 @@ export function parseClaim(claim: RawClaim): Video {
     channelThumb: channel.value?.thumbnail?.url,
     claimName: claim.name,
     hash: value.source?.hash,
+    size: Number(value.source?.size) || undefined,
+    mediaType: value.source?.media_type,
   };
 }
 
@@ -41,6 +43,8 @@ export function normalizeVideo(raw: unknown): Video | null {
     channelThumb: stored.channelThumb || stored.channelThumbnail,
     claimName,
     hash: stored.hash || stored._sourceHash,
+    size: Number(stored.size) || undefined,
+    mediaType: typeof stored.mediaType === 'string' ? stored.mediaType : undefined,
   };
 }
 

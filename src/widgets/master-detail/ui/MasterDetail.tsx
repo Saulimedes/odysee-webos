@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { CARD_GAP, KEY, contentWidth, gridHeight } from '@/shared/config';
-import { PRIORITY, useDebounced, useKeys, useNav, useRemembered } from '@/shared/lib';
+import { PRIORITY, cycle, pointerMoved, useDebounced, useKeys, useNav, useRemembered } from '@/shared/lib';
 import { Avatar, EmptyState, Spinner, VirtualGrid } from '@/shared/ui';
 
 export interface MasterEntry {
@@ -24,6 +24,7 @@ interface Props {
 }
 
 const LIST_WIDTH = 440;
+const COLLAPSED_WIDTH = 92;
 const ENTRY_HEIGHT = 76;
 const ENTRY_GAP = 6;
 const HEADER = 96;
@@ -47,8 +48,8 @@ export function MasterDetail({ stateKey, title, entries, loading, emptyTitle, em
 
   useKeys((event) => {
     switch (event.keyCode) {
-      case KEY.UP: setSelected(Math.max(0, selected - 1)); return true;
-      case KEY.DOWN: setSelected(Math.min(entries.length - 1, selected + 1)); return true;
+      case KEY.UP: setSelected(cycle(selected, -1, entries.length)); return true;
+      case KEY.DOWN: setSelected(cycle(selected, 1, entries.length)); return true;
       case KEY.LEFT: nav.focusSidebar(); return true;
       case KEY.RIGHT:
       case KEY.ENTER: setZone('detail'); return true;
@@ -64,12 +65,19 @@ export function MasterDetail({ stateKey, title, entries, loading, emptyTitle, em
     return false;
   }, { enabled: inDetail, priority: PRIORITY.content - 1 });
 
-  const detailWidth = contentWidth() - LIST_WIDTH - CARD_GAP * 2;
+  const collapsed = inDetail && entries.length > 0;
+  const listWidth = collapsed ? COLLAPSED_WIDTH : LIST_WIDTH;
+  const detailWidth = contentWidth() - listWidth - CARD_GAP * 2;
   const height = gridHeight();
 
   return (
-    <div className="masterDetail">
-      <aside className="masterDetail__list" style={{ width: LIST_WIDTH }} ref={listRef}>
+    <div className={`masterDetail${collapsed ? ' masterDetail--collapsed' : ''}`}>
+      <aside
+        className="masterDetail__list"
+        style={{ width: listWidth }}
+        ref={listRef}
+        onMouseMove={(event) => { if (zone !== 'list' && pointerMoved(event)) setZone('list'); }}
+      >
         <h1 className="masterDetail__title">{title}</h1>
         {loading && entries.length === 0 ? (
           <div className="center" style={{ height: height }}><Spinner /></div>
@@ -79,7 +87,7 @@ export function MasterDetail({ stateKey, title, entries, loading, emptyTitle, em
           <VirtualGrid
             items={entries}
             columns={1}
-            cellWidth={LIST_WIDTH}
+            cellWidth={listWidth}
             cellHeight={ENTRY_HEIGHT}
             gap={ENTRY_GAP}
             height={window.innerHeight - HEADER}
@@ -89,6 +97,7 @@ export function MasterDetail({ stateKey, title, entries, loading, emptyTitle, em
               <div
                 className={`entry${index === selected ? ' entry--selected' : ''}${inList && index === selected ? ' entry--active' : ''}`}
                 onClick={() => { setSelected(index); setZone('detail'); }}
+                onMouseMove={(event) => { if (pointerMoved(event) && index !== selected) setSelected(index); }}
               >
                 {item.avatar !== undefined ? <span className="entry__avatar"><Avatar src={item.avatar} name={item.label} size={44} />{item.dot && <i className="entry__dot" />}</span> : item.icon}
                 <span className="entry__label">{item.label}</span>
@@ -97,7 +106,7 @@ export function MasterDetail({ stateKey, title, entries, loading, emptyTitle, em
           />
         )}
       </aside>
-      <div className="masterDetail__detail">
+      <div className="masterDetail__detail" onMouseMove={(event) => { if (zone !== 'detail' && entries.length > 0 && pointerMoved(event)) setZone('detail'); }}>
         {detailEntry && renderDetail(detailEntry, { enabled: inDetail, width: detailWidth, height, leaveToList: () => setZone('list') })}
       </div>
     </div>

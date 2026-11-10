@@ -7,6 +7,7 @@ HTMLElement.prototype.scrollIntoView = () => {};
 beforeEach(() => {
   localStorage.clear();
   vi.stubGlobal('APP_VERSION', 'test');
+  vi.stubGlobal('APP_COMMIT', '');
   vi.stubGlobal('APP_ID', 'org.webosbrew.odysee');
   vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();

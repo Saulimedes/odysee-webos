@@ -1,7 +1,8 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useGridNav } from './gridNav';
-import { PRIORITY, isTextField, useKeys } from './keys';
+import { PRIORITY, useKeys } from './keys';
+import { isTextField } from './textField';
 
 const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
 

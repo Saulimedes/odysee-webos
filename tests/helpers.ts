@@ -16,6 +16,25 @@ export function mockFetch(handler: Handler) {
   return spy;
 }
 
+export function cssRules(css: string, selector: string): Array<Record<string, string>> {
+  const rules: Array<Record<string, string>> = [];
+  const pattern = /([^{}]+)\{([^{}]*)\}/g;
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  let match = pattern.exec(text);
+  while (match) {
+    if (match[1].split(',').some((entry) => entry.replace(/\s+/g, ' ').trim() === selector)) {
+      const declarations: Record<string, string> = {};
+      match[2].split(';').forEach((line) => {
+        const at = line.indexOf(':');
+        if (at > 0) declarations[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+      });
+      rules.push(declarations);
+    }
+    match = pattern.exec(text);
+  }
+  return rules;
+}
+
 export const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 export const rpcResult = (result: unknown) => ({ jsonrpc: '2.0', result, id: 1 });
