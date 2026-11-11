@@ -12,7 +12,7 @@ const KEYS: Record<CollectionKind, string> = {
 };
 const CLOUD_KEYS = { watchLater: 'watchlater', favorites: 'favorites' } as const;
 const MAX_HISTORY = 200;
-const MAX_CLOUD_ITEMS = 50;
+const MAX_CLOUD_ITEMS = 100;
 const WRITE_DELAY = 500;
 
 type Lists = Record<CollectionKind, Video[]>;
@@ -22,6 +22,7 @@ const load = (kind: CollectionKind) => normalizeVideos(readJson<unknown>(KEYS[ki
 export const collections = createStore<Lists>({ watchLater: load('watchLater'), favorites: load('favorites'), history: load('history') });
 
 const timers: Partial<Record<CollectionKind, ReturnType<typeof setTimeout>>> = {};
+const edits: Record<'watchLater' | 'favorites', number> = { watchLater: 0, favorites: 0 };
 
 function flush(kind: CollectionKind) {
   clearTimeout(timers[kind]);
@@ -57,12 +58,14 @@ function pushToCloud(kind: 'watchLater' | 'favorites', change: (items: string[])
 
 export function addToCollection(kind: 'watchLater' | 'favorites', video: Video) {
   if (inCollection(kind, video.id)) return;
+  edits[kind] += 1;
   setList(kind, [video, ...collections.get()[kind]]);
   pushToCloud(kind, (items) => (items.some((item) => item.includes(video.id)) ? items : [claimUri(video), ...items]));
 }
 
 export function removeFromCollection(kind: 'watchLater' | 'favorites', id: string) {
   if (!inCollection(kind, id)) return;
+  edits[kind] += 1;
   setList(kind, collections.get()[kind].filter((video) => video.id !== id));
   pushToCloud(kind, (items) => items.filter((item) => !item.includes(id)));
 }
@@ -77,16 +80,23 @@ export function addToHistory(video: Video) {
   setList('history', [video, ...rest].slice(0, MAX_HISTORY));
 }
 
+export function removeFromHistory(id: string) {
+  if (!inCollection('history', id)) return;
+  setList('history', collections.get().history.filter((video) => video.id !== id));
+}
+
 export function clearCollections(kinds: CollectionKind[] = ['watchLater', 'favorites', 'history']) {
   kinds.forEach((kind) => {
     clearTimeout(timers[kind]);
     delete timers[kind];
     removeKey(KEYS[kind]);
+    if (kind !== 'history') edits[kind] += 1;
   });
   collections.set((lists) => ({ ...lists, ...Object.fromEntries(kinds.map((kind) => [kind, []])) }));
 }
 
 export async function syncCollections(kinds: ('watchLater' | 'favorites')[] = ['watchLater', 'favorites']) {
+  const seen = { ...edits };
   const preferences = await getPreferences();
   const builtin = preferences?.builtinCollections;
   if (!builtin) return;
@@ -97,13 +107,14 @@ export async function syncCollections(kinds: ('watchLater' | 'favorites')[] = ['
   const unique = Array.from(new Set(wanted.flatMap((entry) => entry.ids)));
   let videos: Video[];
   try {
-    videos = await resolveVideos(unique);
+    videos = await resolveVideos(unique, { background: true });
   } catch (error) {
     console.error('Failed to resolve synced collections', error);
     return;
   }
   const byId = new Map(videos.map((video) => [video.id, video]));
   wanted.forEach(({ kind, ids }) => {
+    if (edits[kind] !== seen[kind]) return;
     setList(kind, ids.map((id) => byId.get(id)).filter((video): video is Video => video !== undefined));
   });
 }

@@ -6,7 +6,7 @@
 .loading-spinner--inline { position: relative; top: auto; left: auto; margin: 0 auto; }
 @keyframes spinner-rotate { to { transform: rotate(360deg); } }
 
-.loader-odysee, .loader-pulse { --s: calc(130px * var(--boot-scale, 1)); }
+.loader-odysee { --s: calc(130px * var(--boot-scale, 1)); }
 .loader-odysee svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; will-change: transform; animation: spinner-rotate 1.2s steps(12) infinite; }
 .loader-odysee path { fill: none; stroke-linecap: round; stroke-width: 3.2; stroke: rgba(var(--text-rgb, 255, 255, 255), 0.16); }
 .loader-odysee .a1 { stroke: var(--accent); }
@@ -15,18 +15,9 @@
 .loader-odysee .a4 { stroke: rgba(var(--accent-rgb, 222, 0, 80), 0.48); }
 .loader-odysee .a5 { stroke: rgba(var(--accent-rgb, 222, 0, 80), 0.34); }
 .loader-odysee .a6 { stroke: rgba(var(--accent-rgb, 222, 0, 80), 0.24); }
-.loader-odysee .logo, .loader-pulse .logo { position: absolute; top: 50%; left: 50%; width: 50%; height: 50%; margin: -25% 0 0 -25%; }
-.loader-odysee .logo img, .loader-pulse .logo img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-[data-theme='light'] .loader-odysee .logo img, [data-theme='lighttinted'] .loader-odysee .logo img,
-[data-theme='light'] .loader-pulse .logo img, [data-theme='lighttinted'] .loader-pulse .logo img { filter: brightness(0); }
-
-.loader-pulse .logo { will-change: transform; animation: loader-breathe 1.4s ease-in-out infinite alternate; }
-.loader-pulse .halo {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%;
-  border: calc(var(--s) * 0.03) solid var(--accent); opacity: 0; will-change: transform, opacity; animation: loader-halo 1.4s ease-out infinite;
-}
-@keyframes loader-breathe { from { transform: scale(0.94); } to { transform: scale(1.04); } }
-@keyframes loader-halo { 0% { transform: scale(0.55); opacity: 0.9; } 100% { transform: scale(1); opacity: 0; } }
+.loader-odysee .logo { position: absolute; top: 50%; left: 50%; width: 50%; height: 50%; margin: -25% 0 0 -25%; }
+.loader-odysee .logo img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+[data-theme='light'] .loader-odysee .logo img, [data-theme='lighttinted'] .loader-odysee .logo img { filter: brightness(0); }
 
 .loader-ring {
   box-sizing: border-box; border-radius: 50%; border: calc(var(--s) * 0.104) solid var(--text); border-bottom-color: var(--accent);
@@ -59,13 +50,20 @@
 .loader-bounce i:nth-child(3) { animation-delay: 0.3s; }
 @keyframes loader-hop { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(calc(var(--s) * -0.45)); } }
 
-.loader-ripple { --s: calc(60px * var(--boot-scale, 1)); }
+.loader-ripple { --s: calc(88px * var(--boot-scale, 1)); }
 .loader-ripple i {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%; box-sizing: border-box; border-radius: 50%;
-  border: calc(var(--s) * 0.07) solid var(--accent); opacity: 0; will-change: transform, opacity; animation: loader-ripple 1.6s ease-out infinite;
+  border: calc(var(--s) * 0.09) solid var(--accent); background: rgba(var(--accent-rgb, 222, 0, 80), 0.16);
+  opacity: 0; will-change: transform, opacity; animation: loader-ripple 2.1s cubic-bezier(0.15, 0.5, 0.35, 1) infinite;
 }
-.loader-ripple i:nth-child(2) { animation-delay: -0.8s; }
-@keyframes loader-ripple { 0% { transform: scale(0.15); opacity: 0.9; } 100% { transform: scale(1); opacity: 0; } }
+.loader-ripple i:nth-child(2) { animation-delay: -0.7s; }
+.loader-ripple i:nth-child(3) { animation-delay: -1.4s; }
+.loader-ripple b {
+  position: absolute; top: 50%; left: 50%; width: 24%; height: 24%; margin: -12% 0 0 -12%; border-radius: 50%;
+  background: var(--accent); will-change: transform; animation: loader-drop 2.1s ease-in-out infinite;
+}
+@keyframes loader-ripple { 0% { transform: scale(0.28); opacity: 1; } 55% { opacity: 0.7; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes loader-drop { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.22); } 36% { transform: scale(1); } }
 
 .loaderPreview { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 120px; height: 60px; margin-right: 24px; --boot-scale: 0.42; }
 .loaderPreview .loading-spinner--inline { flex-shrink: 0; margin: 0; }

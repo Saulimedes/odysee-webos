@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { claim, cssRules, flush, mockFetch, rpcResult, video } from '../../tests/helpers';
 import { refreshHomepage } from '@/entities/category';
-import { hoverOver, renderWithNav, setViewport } from '../../tests/render';
+import { hoverOver, renderWithNav, setViewport, tapOk } from '../../tests/render';
 import { invalidate } from '@/shared/api';
 import { forgetRemembered } from '@/shared/lib/remember';
 import { getSetting, setSetting } from '@/shared/config/settings';
@@ -20,7 +20,7 @@ import de from '@/shared/i18n/locales/de';
 import { SettingsPage } from './settings';
 import { LoginPage } from './login';
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 const v = (id: string) => video(id) as Video;
 
 beforeEach(() => {
@@ -37,7 +37,6 @@ beforeEach(() => {
   setSetting('textScale', 1);
   setSetting('autoplay', true);
   setSetting('nsfw', false);
-  setSetting('quality', 'auto');
   setSetting('aspectRatio', 'auto');
   setSetting('playbackSpeed', 1);
   setSetting('loaderStyle', 'ring');
@@ -107,8 +106,8 @@ describe('LibraryPage', () => {
     expect(nav.focusSidebar).toHaveBeenCalled();
     press(40);
     expect(document.querySelector('.card--active')).not.toBeNull();
-    press(13);
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), expect.any(Array));
     press(38);
     expect(document.querySelector('.libraryCard--active')).not.toBeNull();
     fireEvent.click(screen.getAllByText('Watch History')[0]);
@@ -121,8 +120,8 @@ describe('ListPage', () => {
     collections.set({ watchLater: [], favorites: [v('f1')], history: [] });
     const { nav } = renderWithNav(<ListPage section="favorites" />);
     expect(screen.getByText('Favorites')).toBeInTheDocument();
-    press(13);
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }));
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }), expect.any(Array));
   });
 
   it('shows empty hints', () => {
@@ -176,8 +175,8 @@ describe('SearchPage', () => {
     expect(spy.mock.calls.some(([url]) => String(url).includes('s=fixture'))).toBe(true);
     press(40);
     press(40);
-    press(13);
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }));
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'r1' }), expect.any(Array));
   });
 
   it('switches to channels and opens one', async () => {
@@ -264,7 +263,7 @@ describe('SettingsPage', () => {
     Appearance: ['Theme', 'Accent Color', 'Font', 'Loading Animation', 'Corners', 'Text Size', 'Card Size'],
     Customize: ['Customize Homepage', 'Customize Sidebar', 'Logo Button', 'Menu Icon Style', 'Menu Icon Size'],
     Language: ['App Language', 'Homepage Language'],
-    Playback: ['Autoplay next video', 'Resume playback', 'Video Quality', 'Aspect Ratio', 'Playback Speed', 'Back Button', 'Stats for Nerds'],
+    Playback: ['Autoplay next video', 'Resume playback', 'Aspect Ratio', 'Playback Speed', 'Back Button', 'Stats for Nerds'],
     About: ['Odysee for webOS'],
   };
 
@@ -713,10 +712,11 @@ describe('SettingsPage', () => {
     await openSetting('Appearance', 'Loading Animation');
     expect(document.querySelector('.row--active .row__value')?.textContent).toBe('Ring');
     press(13);
-    expect(document.querySelectorAll('.picker .loaderPreview')).toHaveLength(8);
-    expect(Array.from(document.querySelectorAll('.pickerItem')).map((item) => item.textContent?.replace('current', ''))).toEqual(['Ring', 'Dots', 'Twin Arcs', 'Growing Dots', 'Bouncing Dots', 'Ripple', 'Odysee Wheel', 'Odysee Pulse']);
-    ['ring', 'dots', 'arcs', 'typing', 'bounce', 'ripple', 'odysee', 'pulse'].forEach((code) => expect(document.querySelector(`.picker .loader-${code}`)).not.toBeNull());
-    expect(document.querySelector('.picker .loader-odysee svg')).not.toBeNull();
+    expect(document.querySelectorAll('.picker .loaderPreview')).toHaveLength(6);
+    expect(Array.from(document.querySelectorAll('.pickerItem')).map((item) => item.textContent?.replace('current', ''))).toEqual(['Ring', 'Dots', 'Twin Arcs', 'Growing Dots', 'Bouncing Dots', 'Ripple']);
+    ['ring', 'dots', 'arcs', 'typing', 'bounce', 'ripple'].forEach((code) => expect(document.querySelector(`.picker .loader-${code}`)).not.toBeNull());
+    ['odysee', 'pulse'].forEach((code) => expect(document.querySelector(`.picker .loader-${code}`)).toBeNull());
+    expect(document.querySelector('.picker img')).toBeNull();
     press(40);
     expect(getSetting('loaderStyle')).toBe('dots');
     for (let index = 0; index < 4; index++) press(40);

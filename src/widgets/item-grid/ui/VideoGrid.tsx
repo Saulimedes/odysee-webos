@@ -34,9 +34,10 @@ export function VideoGrid({ videos, progress, width, ...rest }: Props) {
       items={videos}
       layout={layout}
       getKey={(video) => video.id}
-      onSelect={(video) => nav.play(video)}
-      renderItem={(video, index, active, pick, hover) => (
-        <VideoCard video={video} index={index} active={active} thumbWidth={layout.card.width} progress={progress?.(video)} onSelect={pick} onHover={hover} />
+      onSelect={(video) => nav.play(video, videos)}
+      onHold={(video) => nav.openMenu(video)}
+      renderItem={(video, index, active, pick, hover, menu) => (
+        <VideoCard video={video} index={index} active={active} thumbWidth={layout.card.width} progress={progress?.(video)} onSelect={pick} onHover={hover} onMenu={menu} />
       )}
     />
   );

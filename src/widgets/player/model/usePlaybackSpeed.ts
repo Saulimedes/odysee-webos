@@ -12,6 +12,7 @@ export function usePlaybackSpeed(videoRef: RefObject<HTMLVideoElement | null>, s
 
   useEffect(() => {
     const video = videoRef.current;
+    if (speed !== 1) changedRef.current = true;
     if (!video || (speed === 1 && !changedRef.current)) return undefined;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -21,10 +22,7 @@ export function usePlaybackSpeed(videoRef: RefObject<HTMLVideoElement | null>, s
       clearTimeout(timer);
       const result = await applyPlayRate(video, speed);
       if (cancelled) return;
-      if (result === 'ok') {
-        changedRef.current = true;
-        return;
-      }
+      if (result === 'ok') return;
       failures += 1;
       if (failures < (result === 'pending' ? PENDING_TRIES : FAILED_TRIES)) timer = setTimeout(apply, RETRY_MS);
       else unsupportedRef.current();

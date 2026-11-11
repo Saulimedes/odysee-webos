@@ -5,7 +5,7 @@ import { NavContext, type NavApi } from '../src/shared/lib/nav';
 import { useWheelNavigation } from '../src/shared/lib/pointer';
 
 export function makeNav(overrides: Partial<NavApi> = {}): NavApi {
-  return { sidebarFocused: false, focusSidebar: vi.fn(), play: vi.fn(), openChannel: vi.fn(), go: vi.fn(), ...overrides };
+  return { sidebarFocused: false, focusSidebar: vi.fn(), play: vi.fn(), openChannel: vi.fn(), openMenu: vi.fn(), go: vi.fn(), ...overrides };
 }
 
 export function renderWithNav(ui: ReactElement, overrides: Partial<NavApi> = {}) {
@@ -36,4 +36,9 @@ export function hoverOver(element: Element) {
 
 export function shakeOver(element: Element) {
   fireEvent.mouseMove(element, { clientX: pointerX + 4, clientY: 22 });
+}
+
+export function tapOk() {
+  fireEvent.keyDown(window, { keyCode: 13 });
+  fireEvent.keyUp(window, { keyCode: 13 });
 }

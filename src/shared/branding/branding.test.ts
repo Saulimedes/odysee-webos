@@ -14,8 +14,9 @@ const { injectBoot, BOOT_FILES } = createRequire(import.meta.url)(path.join(root
 const source = fs.readFileSync(path.join(root, 'src/index.html'), 'utf8');
 
 describe('loaders', () => {
-  it('have markup and a name for every startup animation', () => {
-    expect(Object.keys(LOADER_MARKUP).sort()).toEqual(LOADER_STYLES.map((style) => style.code).sort());
+  it('have markup and a name for every loading animation, and the startup wheel has markup but is not offered', () => {
+    expect(Object.keys(LOADER_MARKUP).sort()).toEqual([...LOADER_STYLES.map((style) => style.code), 'odysee'].sort());
+    expect(LOADER_STYLES.map((style) => style.code)).not.toContain('odysee');
     expect(LOADER_STYLES[0].code).toBe('ring');
   });
 
@@ -29,13 +30,14 @@ describe('loaders', () => {
   it('are styled for every animation', () => {
     const css = fs.readFileSync(path.join(root, 'src/shared/branding/loaders.css'), 'utf8');
     LOADER_STYLES.forEach((style) => expect(css).toContain(`.loader-${style.code}`));
+    expect(css).toContain('.loader-odysee');
     expect(css).toContain('steps(12)');
   });
 });
 
 describe('start animation figurine', () => {
   const css = fs.readFileSync(path.join(root, 'src/shared/branding/loaders.css'), 'utf8');
-  const loaders = ['odysee', 'pulse'];
+  const loaders = ['odysee'];
   const lightThemes = ['light', 'lighttinted'];
 
   it('is the astronaut alone, with no coloured tile or rounded corners behind it', () => {
@@ -67,8 +69,41 @@ describe('start animation figurine', () => {
     }));
   });
 
-  it('is drawn as a logo image inside both the wheel and the pulse', () => {
-    loaders.forEach((loader) => expect(LOADER_MARKUP[loader as 'odysee' | 'pulse']).toContain('<i class="logo"><img src="odysee-logo.png"'));
+  it('is drawn as a logo image inside the wheel', () => {
+    loaders.forEach((loader) => expect(LOADER_MARKUP[loader as 'odysee']).toContain('<i class="logo"><img src="odysee-logo.png"'));
+  });
+
+  it('is part of the start screen only, none of the loading animations to choose from has it', () => {
+    LOADER_STYLES.forEach((style) => {
+      expect(LOADER_MARKUP[style.code as keyof typeof LOADER_MARKUP]).not.toContain('odysee-logo');
+      expect(LOADER_MARKUP[style.code as keyof typeof LOADER_MARKUP]).not.toContain('<svg');
+    });
+    expect(LOADER_STYLES.map((style) => style.name)).not.toContain('Odysee Pulse');
+    expect(Object.keys(LOADER_MARKUP)).not.toContain('pulse');
+    expect(fs.readFileSync(path.join(root, 'src/shared/branding/loaders.css'), 'utf8')).not.toMatch(/pulse|halo|breathe/);
+  });
+});
+
+describe('loading animation previews on the picked row', () => {
+  const styles = fs.readFileSync(path.join(root, 'src/app/styles/styles.css'), 'utf8');
+  const loaders = fs.readFileSync(path.join(root, 'src/shared/branding/loaders.css'), 'utf8');
+
+  it('are drawn in the readable color, since the row is filled with the accent that they are drawn in otherwise', () => {
+    expect(cssRules(styles, '.pickerItem--active')[0].background).toBe('var(--accent)');
+    const rules = cssRules(styles, '.pickerItem--active .loaderPreview');
+    expect(rules).toHaveLength(1);
+    expect(rules[0]['--accent']).toBe('var(--accent-contrast)');
+    expect(rules[0]['--accent-rgb']).toBe('var(--accent-contrast-rgb)');
+    expect(rules[0]['--text']).toMatch(/^rgba\(var\(--accent-contrast-rgb\), 0\.\d+\)$/);
+  });
+
+  it('can be recolored because every animation takes its colors from the variables that the row replaces', () => {
+    expect(loaders).not.toMatch(/#de0050/i);
+    LOADER_STYLES.forEach((style) => {
+      const rules = loaders.split('}').filter((rule) => rule.includes(`.loader-${style.code}`) && !/--s:|@keyframes/.test(rule.split('{')[0]));
+      expect(rules.join('}')).toMatch(/var\(--accent\)/);
+      expect(rules.join('}')).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+    });
   });
 });
 
@@ -88,7 +123,6 @@ describe('start screen', () => {
 
   it('uses a plain image for the logo, which every webOS version can draw from a local file', () => {
     expect(LOADER_MARKUP.odysee).toContain('<img src="odysee-logo.png"');
-    expect(LOADER_MARKUP.pulse).toContain('<img src="odysee-logo.png"');
     expect(fs.readFileSync(path.join(root, 'webpack.config.js'), 'utf8')).toContain("from: 'odysee-logo.png'");
     expect(fs.readFileSync(path.join(root, 'src/shared/branding/loaders.css'), 'utf8')).not.toContain('mask');
   });
@@ -153,12 +187,12 @@ describe('new loading animations', () => {
   };
 
   it('are offered next to the others and have markup, which is empty because CSS draws them', () => {
-    expect(LOADER_STYLES.map((style) => style.code)).toEqual(['ring', 'dots', 'arcs', 'typing', 'bounce', 'ripple', 'odysee', 'pulse']);
+    expect(LOADER_STYLES.map((style) => style.code)).toEqual(['ring', 'dots', 'arcs', 'typing', 'bounce', 'ripple']);
     expect(LOADER_STYLES.slice(2, 6).map((style) => style.name)).toEqual(['Twin Arcs', 'Growing Dots', 'Bouncing Dots', 'Ripple']);
     expect(LOADER_MARKUP.arcs).toBe('');
     expect(LOADER_MARKUP.typing).toBe('');
     expect(LOADER_MARKUP.bounce).toBe('<i></i><i></i><i></i>');
-    expect(LOADER_MARKUP.ripple).toBe('<i></i><i></i>');
+    expect(LOADER_MARKUP.ripple).toBe('<i></i><i></i><i></i><b></b>');
   });
 
   it('turn two arcs in the accent color half way round', () => {
@@ -192,14 +226,25 @@ describe('new loading animations', () => {
     expect(css).toMatch(/@keyframes loader-hop \{ 0%, 60%, 100% \{ transform: translateY\(0\); \} 30% \{ transform: translateY\(calc\(var\(--s\) \* -0\.45\)\); \} \}/);
   });
 
-  it('send two accent rings out from the middle that fade away, half a turn apart in time', () => {
+  it('send three filled accent rings out from a dot in the middle, one third of a turn apart in time', () => {
     const ring = cssRules(css, '.loader-ripple i');
     expect(ring).toHaveLength(1);
     expect(ring[0]['border-radius']).toBe('50%');
-    expect(ring[0].border).toContain('solid var(--accent)');
-    expect(ring[0].animation).toBe('loader-ripple 1.6s ease-out infinite');
-    expect(cssRules(css, '.loader-ripple i:nth-child(2)')[0]['animation-delay']).toBe('-0.8s');
-    expect(css).toMatch(/@keyframes loader-ripple \{ 0% \{ transform: scale\(0\.15\); opacity: 0\.9; \} 100% \{ transform: scale\(1\); opacity: 0; \} \}/);
+    expect(ring[0].border).toBe('calc(var(--s) * 0.09) solid var(--accent)');
+    expect(ring[0].background).toBe('rgba(var(--accent-rgb, 222, 0, 80), 0.16)');
+    expect(ring[0].animation).toBe('loader-ripple 2.1s cubic-bezier(0.15, 0.5, 0.35, 1) infinite');
+    expect(cssRules(css, '.loader-ripple i:nth-child(2)')[0]['animation-delay']).toBe('-0.7s');
+    expect(cssRules(css, '.loader-ripple i:nth-child(3)')[0]['animation-delay']).toBe('-1.4s');
+    expect(css).toMatch(/@keyframes loader-ripple \{ 0% \{ transform: scale\(0\.28\); opacity: 1; \} 55% \{ opacity: 0\.7; \} 100% \{ transform: scale\(1\); opacity: 0; \} \}/);
+  });
+
+  it('keep a solid accent dot in the middle of the ripple that beats with every ring', () => {
+    const dot = cssRules(css, '.loader-ripple b');
+    expect(dot).toHaveLength(1);
+    expect(dot[0].background).toBe('var(--accent)');
+    expect(dot[0]['border-radius']).toBe('50%');
+    expect(dot[0].animation).toBe('loader-drop 2.1s ease-in-out infinite');
+    expect(cssRules(css, '.loader-ripple')[0]['--s']).toBe('calc(88px * var(--boot-scale, 1))');
   });
 
   it('use nothing Chrome 68 cannot draw', () => {

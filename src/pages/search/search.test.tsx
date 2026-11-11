@@ -1,11 +1,12 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { claim, flush, jsonResponse, mockFetch, rpcResult } from '../../../tests/helpers';
+import { bodyOf, claim, flush, jsonResponse, mockFetch, rpcResult } from '../../../tests/helpers';
 import { hoverOver, renderWithNav, setViewport } from '../../../tests/render';
 import { invalidate } from '@/shared/api';
 import { forgetRemembered } from '@/shared/lib/remember';
 import { SearchPage } from './ui/SearchPage';
 import { searchChannelPage, searchVideoPage } from './api/search';
+import { DEFAULT_FILTERS, filterParams, filtersKey, isFiltered } from './model/filters';
 
 const typeInto = (text: string) => fireEvent.change(screen.getByPlaceholderText('Search Odysee...'), { target: { value: text } });
 
@@ -135,5 +136,133 @@ describe('search api', () => {
     expect(channels).toEqual({ items: [], count: 0 });
     const claimSearches = spy.mock.calls.filter(([url]) => !String(url).includes('lighthouse'));
     expect(claimSearches).toHaveLength(0);
+  });
+});
+
+describe('search filters', () => {
+  const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
+  const lighthouseUrls = (spy: ReturnType<typeof mockFetch>) => spy.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('lighthouse'));
+  const button = () => document.querySelector('.searchInput__filters') as HTMLElement | null;
+  const entries = () => Array.from(document.querySelectorAll('.pickerItem')).map((item) => item.textContent);
+
+  function setup() {
+    const spy = mockFetch((url, init) => {
+      if (url.includes('lighthouse')) return [{ claimId: 'y1' }];
+      return rpcResult({ items: bodyOf(init).params.claim_ids.map((id: string) => claim(id, `Result ${id}`)) });
+    });
+    const view = renderWithNav(<SearchPage />);
+    return { spy, ...view };
+  }
+
+  it('translates the filters into what Lighthouse understands', () => {
+    expect(filterParams(DEFAULT_FILTERS)).toEqual({});
+    expect(filterParams({ sort: 'newest', time: 'week', length: 'short' })).toEqual({ sort_by: 'release_time', time_filter: 'thisweek', max_duration: '240' });
+    expect(filterParams({ sort: 'relevance', time: 'today', length: 'long' })).toEqual({ time_filter: 'today', min_duration: '1200' });
+    expect(filterParams({ sort: 'relevance', time: 'month', length: 'any' })).toEqual({ time_filter: 'thismonth' });
+    expect(filterParams({ sort: 'relevance', time: 'year', length: 'any' })).toEqual({ time_filter: 'thisyear' });
+    expect(isFiltered(DEFAULT_FILTERS)).toBe(false);
+    expect(isFiltered({ ...DEFAULT_FILTERS, time: 'today' })).toBe(true);
+    expect(filtersKey({ sort: 'newest', time: 'any', length: 'long' })).toBe('newest:any:long');
+  });
+
+  it('sends the filters with the video search, and none by default', async () => {
+    const spy = mockFetch((url, init) => (url.includes('lighthouse') ? [{ claimId: 'a' }] : rpcResult({ items: bodyOf(init).params.claim_ids.map((id: string) => claim(id)) })));
+    await searchVideoPage('words', 0);
+    await searchVideoPage('words', 0, () => true, { sort: 'newest', time: 'today', length: 'long' });
+    const [plain, filtered] = lighthouseUrls(spy).map((url) => new URL(url).searchParams);
+    expect(plain.has('sort_by') || plain.has('time_filter') || plain.has('min_duration')).toBe(false);
+    expect(filtered.get('sort_by')).toBe('release_time');
+    expect(filtered.get('time_filter')).toBe('today');
+    expect(filtered.get('min_duration')).toBe('1200');
+    expect(filtered.get('claimType')).toBe('file');
+  });
+
+  it('opens from the end of the search field, searches again with the choice, and shows that a filter is on', async () => {
+    const { spy } = setup();
+    typeInto('fixture');
+    await screen.findByText('Result y1', {}, { timeout: 3000 });
+    expect(button()?.className).not.toContain('--on');
+    press(39);
+    expect(button()?.className).toContain('--active');
+    expect(document.querySelector('.searchInput--active')).toBeNull();
+    press(13);
+    expect(screen.getByText('Filters', { selector: 'h2' })).toBeInTheDocument();
+    expect(entries()).toEqual(['Sort byRelevance', 'UploadedAny time', 'LengthAny length']);
+    press(13);
+    expect(screen.getByText('Sort by', { selector: 'h2' })).toBeInTheDocument();
+    press(40);
+    press(13);
+    expect(document.querySelector('.picker')).toBeNull();
+    await waitFor(() => expect(lighthouseUrls(spy).some((url) => url.includes('sort_by=release_time'))).toBe(true));
+    expect(button()?.className).toContain('--on');
+    expect(button()?.className).toContain('--active');
+    await screen.findByText('Result y1');
+  });
+
+  it('chooses the other filters, goes back from a choice, and resets them', async () => {
+    const { spy } = setup();
+    typeInto('fixture');
+    await screen.findByText('Result y1', {}, { timeout: 3000 });
+    press(39);
+    press(13);
+    press(40);
+    press(13);
+    press(40); press(40);
+    press(13);
+    await waitFor(() => expect(lighthouseUrls(spy).some((url) => url.includes('time_filter=thisweek'))).toBe(true));
+    press(13);
+    expect(entries()).toEqual(['Sort byRelevance', 'UploadedThis week', 'LengthAny length', 'Reset filters']);
+    press(40); press(40);
+    press(13);
+    press(461);
+    expect(screen.getByText('Filters', { selector: 'h2' })).toBeInTheDocument();
+    press(40);
+    press(13);
+    await waitFor(() => expect(button()?.className).not.toContain('--on'));
+    expect(document.querySelector('.picker')).toBeNull();
+  });
+
+  it('moves between the field, the button and the tabs, and leaves the menu with Back', async () => {
+    setup();
+    typeInto('fix');
+    press(39);
+    expect(button()?.className).toContain('--active');
+    press(38);
+    press(39);
+    expect(button()?.className).toContain('--active');
+    press(37);
+    expect(document.querySelector('.searchInput--active')).not.toBeNull();
+    press(39);
+    press(40);
+    expect(document.querySelector('.tabs--active')).not.toBeNull();
+    press(38);
+    press(39);
+    press(13);
+    press(461);
+    expect(document.querySelector('.picker')).toBeNull();
+  });
+
+  it('keeps Right inside the text while the caret is not at the end, and has no button for channels', async () => {
+    setup();
+    typeInto('fixture');
+    const input = screen.getByPlaceholderText('Search Odysee...') as HTMLInputElement;
+    input.setSelectionRange(2, 2);
+    press(39);
+    expect(button()?.className).not.toContain('--active');
+    expect(button()).not.toBeNull();
+    press(40);
+    press(39);
+    expect(button()).toBeNull();
+    press(38);
+    press(39);
+    expect(document.querySelector('.searchInput__filters--active')).toBeNull();
+  });
+
+  it('opens with a click and when the cursor moves onto it', async () => {
+    setup();
+    hoverOver(button() as HTMLElement);
+    expect(button()?.className).toContain('--active');
+    fireEvent.click(button() as HTMLElement);
+    expect(screen.getByText('Filters', { selector: 'h2' })).toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { SETTING_DEFAULTS, STORAGE } from './constants';
+import { LOADER_STYLES, SETTING_DEFAULTS, STORAGE } from './constants';
 
 export type Settings = typeof SETTING_DEFAULTS;
 export type SettingKey = keyof Settings;
@@ -7,6 +7,7 @@ type Listener = (key: SettingKey) => void;
 
 const listeners = new Set<Listener>();
 const values: Partial<Record<SettingKey, string | number | boolean>> = {};
+const CHOICES: Partial<Record<SettingKey, unknown[]>> = { loaderStyle: LOADER_STYLES.map((style) => style.code) };
 
 function parseStored(raw: string): unknown {
   try { return JSON.parse(raw); } catch { return raw; }
@@ -24,7 +25,9 @@ function readStored<K extends SettingKey>(key: K): Settings[K] {
   try {
     const raw = localStorage.getItem(key);
     const stored = raw === null ? readLegacy(key) : parseStored(raw);
-    return typeof stored === typeof fallback ? stored as Settings[K] : fallback;
+    if (typeof stored !== typeof fallback) return fallback;
+    const choices = CHOICES[key];
+    return choices && !choices.includes(stored) ? fallback : stored as Settings[K];
   } catch { return fallback; }
 }
 

@@ -74,10 +74,12 @@ function accentVars(accentColor: string, isLight: boolean) {
   const rgb = hexToRgb(accentColor);
   const { h, s, l } = rgbToHsl(rgb);
   const textLightness = isLight ? Math.min(l, 38) : Math.max(l, 48);
+  const darkOn = luminance(rgb) > 0.4;
   return {
     '--accent': toHex(rgb),
     '--accent-rgb': rgbString(rgb),
-    '--accent-contrast': luminance(rgb) > 0.4 ? '#000000' : '#ffffff',
+    '--accent-contrast': darkOn ? '#000000' : '#ffffff',
+    '--accent-contrast-rgb': darkOn ? '0, 0, 0' : '255, 255, 255',
     '--accent-text': toHex(hslToRgb(h, s, textLightness)),
   };
 }
@@ -136,9 +138,10 @@ export function computeAppearance(settings: Pick<Settings, 'themeMode' | 'accent
   const { themeMode, accentColor, uiFont, cornerStyle, textScale, tileScale, iconVariant = 'outlined' } = settings;
   const palette = paletteFor(themeMode, accentColor);
   const accent = accentVars(accentColor, isLightTheme(themeMode));
-  const radii = (CORNER_STYLES.find((corner) => corner.code === cornerStyle) || CORNER_STYLES[1]).radii;
+  const corner = CORNER_STYLES.find((candidate) => candidate.code === cornerStyle) || CORNER_STYLES[1];
+  const radii = corner.radii;
   return {
-    attrs: { 'data-theme': themeMode, 'data-icons': iconVariant, 'data-contrast': accent['--accent-contrast'] === '#000000' ? 'dark' : 'light' },
+    attrs: { 'data-theme': themeMode, 'data-icons': iconVariant, 'data-corners': corner.code, 'data-contrast': accent['--accent-contrast'] === '#000000' ? 'dark' : 'light' },
     vars: {
       ...accent,
       ...paletteVars(palette),

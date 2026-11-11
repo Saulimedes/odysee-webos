@@ -9,6 +9,7 @@ const KEY = 'homepage';
 const keyFor = (language: string) => (language === 'en' ? KEY : `${KEY}:${language}`);
 const OPTIONS = { ttl: 6 * 60 * 60 * 1000, persist: true };
 const FEATURED_ID = 'PRIMARY_CONTENT';
+const HOMEPAGE_CODES = ['en', 'fr', 'es', 'de', 'it', 'zh', 'ru', 'hi', 'pt-BR'];
 
 const ORDERS: CategoryOrder[] = ['trending', 'new', 'top'];
 
@@ -34,9 +35,9 @@ export function parseCategory(id: string, raw: RawCategory, now = Date.now()): C
 
 export function homepageLanguage() {
   const chosen = getSetting('homepageLanguage');
-  if (chosen !== 'auto') return chosen;
   const app = resolveLanguage(getSetting('uiLanguage'));
-  return app === 'pt' ? 'pt-BR' : app;
+  const wanted = chosen !== 'auto' ? chosen : app === 'pt' ? 'pt-BR' : app;
+  return HOMEPAGE_CODES.includes(wanted) ? wanted : 'en';
 }
 
 export function parseHomepage(response: ContentResponse, language = 'en'): Homepage {
@@ -67,7 +68,7 @@ export async function refreshHomepage(force = false): Promise<Homepage | null> {
   const key = keyFor(language);
   if (force) invalidate(key);
   try {
-    const next = await query(key, async () => parseHomepage(await getJson<ContentResponse>(CONTENT_API_URL), language), OPTIONS);
+    const next = await query(key, async () => parseHomepage(await getJson<ContentResponse>(`${CONTENT_API_URL}?hp=${language}`), language), OPTIONS);
     if (language === homepageLanguage()) {
       homepage.set(next);
       failed.set(false);

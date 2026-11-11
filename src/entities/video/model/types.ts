@@ -10,9 +10,9 @@ export interface Video {
   channelTitle: string;
   channelThumb?: string;
   claimName: string;
-  hash?: string;
   size?: number;
   mediaType?: string;
+  sdHash?: string;
 }
 
 export interface RawClaim {
@@ -25,7 +25,7 @@ export interface RawClaim {
     release_time?: string;
     thumbnail?: { url?: string };
     video?: { duration?: number; height?: number };
-    source?: { hash?: string; size?: string | number; media_type?: string };
+    source?: { size?: string | number; media_type?: string; sd_hash?: string };
     claims?: string[];
   };
   signing_channel?: {

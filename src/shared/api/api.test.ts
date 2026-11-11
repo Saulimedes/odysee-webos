@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flush, mockFetch, rpcResult } from '../../../tests/helpers';
+import { flush, jsonResponse, mockFetch, rpcResult } from '../../../tests/helpers';
 import { createLimiter } from './limiter';
 
 beforeEach(() => { vi.resetModules(); });
@@ -142,5 +142,74 @@ describe('lbry rpc', () => {
     const spy = mockFetch(() => rpcResult(1));
     await lbryRpcAuthenticated('preference_get', {}, 'tok');
     expect((spy.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'X-Lbry-Auth-Token': 'tok' });
+  });
+});
+
+describe('timeouts and retries', () => {
+  const hang = () => vi.fn((_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+  }));
+
+  it('gives up on a request that never answers', async () => {
+    vi.useFakeTimers();
+    const { getJson, postForm } = await import('./http');
+    vi.stubGlobal('fetch', hang());
+    const json = expect(getJson('https://x')).rejects.toThrow('aborted');
+    const form = expect(postForm('https://x', { a: '1' })).rejects.toThrow('aborted');
+    await vi.advanceTimersByTimeAsync(20000);
+    await json;
+    await form;
+  });
+
+  it('reads one more time after a network failure, but not after an answer from the API', async () => {
+    vi.useFakeTimers();
+    const { lbryRpc } = await import('./lbry');
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new TypeError('network');
+      return jsonResponse(rpcResult({ ok: 1 }));
+    }));
+    const retried = lbryRpc('claim_search', {});
+    await vi.advanceTimersByTimeAsync(700);
+    expect(await retried).toEqual({ ok: 1 });
+    expect(calls).toBe(2);
+    mockFetch(() => ({ error: { message: 'refused' } }));
+    await expect(lbryRpc('claim_search', {})).rejects.toThrow('refused');
+  });
+
+  it('does not let hung requests block the ones behind them', async () => {
+    vi.useFakeTimers();
+    const { lbryRpc } = await import('./lbry');
+    const stuck = hang();
+    let calls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      calls += 1;
+      if (calls <= 4) return stuck(url, init);
+      return jsonResponse(rpcResult({ fifth: true }));
+    }));
+    const first = Array.from({ length: 4 }, () => lbryRpc('claim_search', {}).catch((error: Error) => error.message));
+    const fifth = lbryRpc('claim_search', {});
+    await vi.advanceTimersByTimeAsync(100);
+    expect(calls).toBe(4);
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(await fifth).toEqual({ fifth: true });
+    expect(await Promise.all(first)).toEqual(['aborted', 'aborted', 'aborted', 'aborted']);
+  });
+
+  it('does not read again after a timeout or an answer that is not JSON, which would only load a busy server more', async () => {
+    vi.useFakeTimers();
+    const { lbryRpc } = await import('./lbry');
+    const stuck = hang();
+    const spy = vi.fn((url: string, init?: RequestInit) => stuck(url, init));
+    vi.stubGlobal('fetch', spy);
+    const timedOut = expect(lbryRpc('claim_search', {})).rejects.toThrow('aborted');
+    await vi.advanceTimersByTimeAsync(16000);
+    await timedOut;
+    expect(spy).toHaveBeenCalledTimes(1);
+    const html = vi.fn(async () => new Response('<html>busy</html>', { status: 503 }));
+    vi.stubGlobal('fetch', html);
+    await expect(lbryRpc('claim_search', {})).rejects.toThrow();
+    expect(html).toHaveBeenCalledTimes(1);
   });
 });

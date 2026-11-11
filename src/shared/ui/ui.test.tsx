@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSetting } from '@/shared/config';
-import { pointerMoved } from '@/shared/lib';
+import { pointerMoved, useKeys } from '@/shared/lib';
 import { hoverOver } from '../../../tests/render';
-import { Avatar, EmptyState, ErrorBoundary, iconKey, OdyseeIcon, OptionPicker, PageTitle, Spinner, Thumb, VirtualGrid } from '.';
+import { Avatar, EmptyState, ErrorBoundary, iconKey, OdyseeIcon, OptionPicker, PageTitle, Spinner, SquircleDefs, Thumb, VirtualGrid } from '.';
 import { ODYSEE_ICONS } from './icons';
 
 describe('Avatar', () => {
@@ -25,6 +25,26 @@ describe('Avatar', () => {
   it('handles an empty name', () => {
     render(<Avatar name="" size={20} />);
     expect(screen.getByText('?')).toBeInTheDocument();
+  });
+
+  it('takes an extra class for the letter and the picture', () => {
+    const { container, rerender } = render(<Avatar name="zed" size={40} className="avatar--corners" />);
+    expect(container.firstElementChild?.className).toBe('avatar avatar--corners');
+    rerender(<Avatar src="https://thumbs.odycdn.com/b.webp" name="Bo" size={40} className="avatar--corners" />);
+    expect(container.firstElementChild?.className).toBe('avatar avatar--corners');
+    rerender(<Avatar src="https://thumbs.odycdn.com/b.webp" name="Bo" size={40} />);
+    expect(container.firstElementChild?.className).toBe('avatar');
+  });
+});
+
+describe('SquircleDefs', () => {
+  it('defines the outline in units of the box it cuts, drawn without size', () => {
+    const { container } = render(<SquircleDefs />);
+    const svg = container.querySelector('svg') as SVGElement;
+    expect(svg.getAttribute('width')).toBe('0');
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+    expect(svg.querySelector('clipPath#squircle')?.getAttribute('clipPathUnits')).toBe('objectBoundingBox');
+    expect(svg.querySelector('path')?.getAttribute('d')?.match(/C/g)).toHaveLength(8);
   });
 });
 
@@ -180,8 +200,31 @@ describe('OptionPicker with the cursor', () => {
 });
 
 describe('OptionPicker keys', () => {
-  const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+  const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
   const options = [{ code: 'a', name: 'Alpha' }, { code: 'b', name: 'Beta' }, { code: 'c', name: 'Gamma' }];
+
+  it('waits for the release of an OK that is still down when it opens, such as the one that opened the menu', () => {
+    function Layer() { useKeys(() => false); return null; }
+    render(<Layer />);
+    fireEvent.keyDown(window, { keyCode: 13 });
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options} value="a" onClose={onClose} />);
+    fireEvent.keyDown(window, { keyCode: 13 });
+    fireEvent.keyDown(window, { keyCode: 13, repeat: true });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyUp(window, { keyCode: 13 });
+    fireEvent.keyDown(window, { keyCode: 13, repeat: true });
+    expect(onClose).not.toHaveBeenCalled();
+    press(13);
+    expect(onClose).toHaveBeenCalledWith(true, 'a');
+  });
+
+  it('works at once when OK is not down while it opens', () => {
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options} value="a" onClose={onClose} />);
+    fireEvent.keyDown(window, { keyCode: 13 });
+    expect(onClose).toHaveBeenCalledWith(true, 'a');
+  });
 
   it('goes round from the last option to the first and back', () => {
     const onPreview = vi.fn();
@@ -195,6 +238,45 @@ describe('OptionPicker keys', () => {
     expect(onPreview).toHaveBeenLastCalledWith('c');
     press(40);
     expect(onPreview).toHaveBeenLastCalledWith('a');
+  });
+});
+
+describe('OptionPicker as a popover', () => {
+  const options = (count: number) => Array.from({ length: count }, (_, index) => ({ code: `c${index}`, name: `Choice ${index}` }));
+  const height = () => (document.querySelector('.vgrid') as HTMLElement).style.height;
+
+  it('sits next to the picture and is only as tall as its entries, with a few more rows scrolling', () => {
+    const { rerender } = render(<OptionPicker title="Pick" options={options(3)} value="c0" placement="popover" onClose={vi.fn()} />);
+    expect(document.querySelector('.picker')).toHaveClass('picker--popover');
+    expect(height()).toBe('228px');
+    rerender(<OptionPicker title="Pick" options={options(5)} value="c0" placement="popover" onClose={vi.fn()} />);
+    expect(height()).toBe('372px');
+    rerender(<OptionPicker title="Pick" options={options(7)} value="c0" placement="popover" onClose={vi.fn()} />);
+    expect(height()).toBe('360px');
+  });
+
+  it('keeps the centered size for the others, whatever the number of entries', () => {
+    render(<OptionPicker title="Pick" options={options(3)} value="c0" onClose={vi.fn()} />);
+    expect(document.querySelector('.picker')).not.toHaveClass('picker--popover');
+    expect(height()).toBe('588px');
+  });
+
+  it('is dismissed by a click next to the panel and not by a click on it', () => {
+    const onDismiss = vi.fn();
+    render(<OptionPicker title="Pick" options={options(3)} value="c0" placement="popover" onDismiss={onDismiss} onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('.picker__panel') as HTMLElement);
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores a click next to it when nobody asked to hear about it, and in the centered picker', () => {
+    const onDismiss = vi.fn();
+    const { rerender } = render(<OptionPicker title="Pick" options={options(3)} value="c0" placement="popover" onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    rerender(<OptionPicker title="Pick" options={options(3)} value="c0" onDismiss={onDismiss} onClose={vi.fn()} />);
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 });
 
@@ -221,36 +303,34 @@ describe('Spinner', () => {
     expect(spinner).not.toHaveClass('spinner');
   });
 
-  it('can show the Odysee wheel with the astronaut', () => {
-    setSetting('loaderStyle', 'odysee');
+  it.each(['odysee', 'pulse'])('leaves the Odysee animations to the start screen, a stored choice of %s shows the ring', (stored) => {
+    setSetting('loaderStyle', stored);
     render(<Spinner />);
     const spinner = screen.getByRole('status');
-    expect(spinner).toHaveClass('loader-odysee');
-    expect(spinner.querySelectorAll('path')).toHaveLength(12);
-    expect(spinner.querySelector('i.logo img[src="odysee-logo.png"]')).not.toBeNull();
+    expect(spinner).toHaveClass('loader-ring');
+    expect(spinner.className).not.toContain(stored);
+    expect(spinner.querySelector('svg')).toBeNull();
+    expect(spinner.querySelector('img')).toBeNull();
   });
 
   it('follows the loading animation chosen in Settings', () => {
-    setSetting('loaderStyle', 'odysee');
+    setSetting('loaderStyle', 'typing');
     const { rerender } = render(<Spinner />);
-    expect(screen.getByRole('status')).toHaveClass('loader-odysee');
+    expect(screen.getByRole('status')).toHaveClass('loader-typing');
     act(() => setSetting('loaderStyle', 'bounce'));
     rerender(<Spinner />);
     expect(screen.getByRole('status')).toHaveClass('loader-bounce');
     expect(screen.getByRole('status').querySelectorAll('i')).toHaveLength(3);
     act(() => setSetting('loaderStyle', 'ripple'));
     expect(screen.getByRole('status')).toHaveClass('loader-ripple');
-    expect(screen.getByRole('status').querySelectorAll('i')).toHaveLength(2);
+    expect(screen.getByRole('status').querySelectorAll('i')).toHaveLength(3);
+    expect(screen.getByRole('status').querySelectorAll('b')).toHaveLength(1);
     act(() => setSetting('loaderStyle', 'arcs'));
     expect(screen.getByRole('status')).toHaveClass('loader-arcs');
     act(() => setSetting('loaderStyle', 'dots'));
     rerender(<Spinner />);
     expect(screen.getByRole('status')).toHaveClass('loader-dots');
     expect(screen.getByRole('status').querySelectorAll('i')).toHaveLength(3);
-    act(() => setSetting('loaderStyle', 'pulse'));
-    expect(screen.getByRole('status')).toHaveClass('loader-pulse');
-    expect(screen.getByRole('status').querySelector('i.halo')).not.toBeNull();
-    expect(screen.getByRole('status').querySelector('img[src="odysee-logo.png"]')).not.toBeNull();
   });
 
   it('falls back to the ring for an unknown stored style', () => {

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cssRules, flush, video } from '../../tests/helpers';
-import { WheelNavigation, hoverOver, renderWithNav, setViewport } from '../../tests/render';
+import { WheelNavigation, hoverOver, renderWithNav, setViewport, tapOk } from '../../tests/render';
 import type { Video } from '@/entities/video';
 import type { Channel } from '@/entities/channel';
 import { session } from '@/entities/session/model/store';
@@ -15,7 +15,7 @@ import { ChannelGrid, FeedGrid, VideoGrid } from './item-grid';
 import { VideoRows, type VideoRow } from './video-rows';
 import { MasterDetail, type MasterEntry } from './master-detail';
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 const videos = (count: number, prefix = 'v') => Array.from({ length: count }, (_, index) => video(`${prefix}${index}`) as Video);
 
 beforeEach(() => {
@@ -49,6 +49,16 @@ describe('Sidebar', () => {
     expect(screen.getByText('Following')).toBeInTheDocument();
     expect(screen.getByText('Playlists')).toBeInTheDocument();
     expect(screen.getByText('@me')).toBeInTheDocument();
+  });
+
+  it('cuts the profile picture to the corner style and carries the squircle outline for Classic', () => {
+    session.set({ token: 't', user: { primary_email: 'a@b.c', profile_image: 'https://x/p.png', channel: { id: 'c', name: 'me', thumb: null } } });
+    setup(false);
+    expect(document.querySelector('.sidebar__brand .avatar')).toHaveClass('avatar--corners');
+    const outline = document.querySelector('#squircle');
+    expect(outline?.getAttribute('clipPathUnits')).toBe('objectBoundingBox');
+    expect(outline?.querySelector('path')?.getAttribute('d')).toMatch(/^M1 \.5C.*Z$/);
+    expect(document.querySelectorAll('#squircle')).toHaveLength(1);
   });
 
   it('falls back to the app name for users without a channel', () => {
@@ -358,8 +368,8 @@ describe('VideoGrid', () => {
     expect(screen.getByText('Title')).toBeInTheDocument();
     expect(screen.getByText('Video v0')).toBeInTheDocument();
     press(39);
-    press(13);
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'v1' }));
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'v1' }), expect.any(Array));
   });
 
   it('opens the sidebar from the first column', () => {
@@ -436,10 +446,35 @@ describe('VideoGrid', () => {
     });
   });
 
+  it('opens the menu of the focused video when OK is held, and does not play it', () => {
+    vi.useFakeTimers();
+    const { nav } = renderWithNav(<VideoGrid stateKey="g-hold" videos={videos(10)} emptyTitle="Empty" />);
+    press(39);
+    fireEvent.keyDown(window, { keyCode: 13 });
+    act(() => { vi.advanceTimersByTime(600); });
+    expect(nav.openMenu).toHaveBeenCalledWith(expect.objectContaining({ id: 'v1' }));
+    fireEvent.keyUp(window, { keyCode: 13 });
+    expect(nav.play).not.toHaveBeenCalled();
+  });
+
+  it('opens the menu with a right click', () => {
+    const { nav } = renderWithNav(<VideoGrid stateKey="g-context" videos={videos(10)} emptyTitle="Empty" />);
+    expect(fireEvent.contextMenu(screen.getByText('Video v2'))).toBe(false);
+    expect(nav.openMenu).toHaveBeenCalledWith(expect.objectContaining({ id: 'v2' }));
+    expect(nav.play).not.toHaveBeenCalled();
+  });
+
+  it('plays a video from the list it is in, so that the next one can follow', () => {
+    const list = videos(4);
+    const { nav } = renderWithNav(<VideoGrid stateKey="g-queue" videos={list} emptyTitle="Empty" />);
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'v0' }), list);
+  });
+
   it('selects by click', () => {
     const { nav } = renderWithNav(<VideoGrid stateKey="g6" videos={videos(12)} emptyTitle="Empty" />);
     fireEvent.click(screen.getByText('Video v2'));
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'v2' }));
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'v2' }), expect.any(Array));
   });
 
   it('moves a row with the wheel', () => {
@@ -609,12 +644,12 @@ describe('VideoRows', () => {
   it('moves across and between rows and plays the focused card', () => {
     const { nav } = renderWithNav(<VideoRows stateKey="vr2" rows={rows()} />);
     press(39); press(39);
-    press(13);
-    expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'a2' }));
+    tapOk();
+    expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'a2' }), expect.any(Array));
     press(40);
     expect(screen.getByText('Loading')).toBeInTheDocument();
-    press(13);
-    expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'b0' }));
+    tapOk();
+    expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'b0' }), expect.any(Array));
     press(40);
     press(40);
     press(38);
@@ -650,10 +685,30 @@ describe('VideoRows', () => {
     expect(document.querySelector('.card--active')).toHaveTextContent('Video b0');
   });
 
+  it('opens the menu of the focused card when OK is held, and plays it when OK is tapped', () => {
+    vi.useFakeTimers();
+    const { nav } = renderWithNav(<VideoRows stateKey="vr-hold" rows={rows()} />);
+    press(39);
+    fireEvent.keyDown(window, { keyCode: 13 });
+    act(() => { vi.advanceTimersByTime(600); });
+    expect(nav.openMenu).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
+    fireEvent.keyUp(window, { keyCode: 13 });
+    expect(nav.play).not.toHaveBeenCalled();
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), rows()[0].videos);
+  });
+
+  it('opens the menu of a card with a right click', () => {
+    const { nav } = renderWithNav(<VideoRows stateKey="vr-context" rows={rows()} />);
+    fireEvent.contextMenu(screen.getByText('Video a2'));
+    expect(nav.openMenu).toHaveBeenCalledWith(expect.objectContaining({ id: 'a2' }));
+    expect(nav.play).not.toHaveBeenCalled();
+  });
+
   it('plays on click', () => {
     const { nav } = renderWithNav(<VideoRows stateKey="vr6" rows={rows()} />);
     fireEvent.click(screen.getByText('Video a1'));
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }));
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), expect.any(Array));
   });
 
   it('moves between rows with the wheel', () => {
@@ -889,5 +944,32 @@ describe('Menu Icon Style on category icons', () => {
     });
     expect(cssRules(css, "html[data-icons='dynamic'] .odyIcon")).toEqual([]);
     expect(cssRules(css, "html[data-icons='outlined'] .odyIcon")).toEqual([]);
+  });
+});
+
+describe('Corners on the profile picture', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '../app/styles/styles.css'), 'utf8');
+
+  it('is a circle with Round corners, square with Square and a squircle with Classic', () => {
+    expect(cssRules(css, '.avatar')[0]['border-radius']).toBe('50%');
+    expect(cssRules(css, "html[data-corners='square'] .avatar--corners")[0]['border-radius']).toBe('0');
+    const classic = cssRules(css, "html[data-corners='classic'] .avatar--corners");
+    expect(classic).toHaveLength(1);
+    expect(classic[0]['border-radius']).toBe('0');
+    expect(classic[0]['clip-path']).toBe('url(#squircle)');
+    expect(classic[0]['will-change']).toBe('transform');
+    expect(cssRules(css, "html[data-corners='round'] .avatar--corners")).toEqual([]);
+  });
+
+  it('keeps the colors of the photo on the light themes, where only the logo turns dark', () => {
+    ['light', 'lighttinted'].forEach((theme) => expect(cssRules(css, `[data-theme='${theme}'] .sidebar__brand > img`)[0].filter).toBe('brightness(0)'));
+    expect(cssRules(css, '.sidebar__brand img')).toEqual([]);
+    expect(cssRules(css, '.sidebar__brand > img')[0]['border-radius']).toBe('var(--radius-md)');
+  });
+
+  it('hides the outline definitions without taking room', () => {
+    const rules = cssRules(css, '.squircleDefs');
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({ position: 'absolute', width: '0', height: '0' });
   });
 });

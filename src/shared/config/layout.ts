@@ -46,3 +46,6 @@ export function channelGridMetrics(containerWidth: number) {
 }
 
 export const gridHeight = () => window.innerHeight - TITLE_HEIGHT;
+
+export const CHANNEL_HEADER_HEIGHT = 168;
+export const channelGridHeight = () => window.innerHeight - CHANNEL_HEADER_HEIGHT;

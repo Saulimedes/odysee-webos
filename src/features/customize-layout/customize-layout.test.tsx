@@ -4,7 +4,7 @@ import { hoverOver } from '../../../tests/render';
 import { LayoutEditor, visibleItems, type LayoutEntry } from '.';
 import { arrange, moveEntry, resetLayout, toggleEntry } from './model/layout';
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 const ids = (items: { id: string }[]) => items.map((item) => item.id);
 const items = ['a', 'b', 'c', 'd'].map((id) => ({ id }));
 const stored = (key: string) => JSON.parse(localStorage.getItem(key) ?? 'null');

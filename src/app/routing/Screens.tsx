@@ -3,6 +3,7 @@ import { ErrorBoundary, Spinner } from '@/shared/ui';
 import type { User } from '@/entities/session';
 import { Home } from '@/pages/home';
 
+const ChannelPage = lazy(() => import('@/pages/channel').then((module) => ({ default: module.ChannelPage })));
 const SearchPage = lazy(() => import('@/pages/search').then((module) => ({ default: module.SearchPage })));
 const LoginPage = lazy(() => import('@/pages/login').then((module) => ({ default: module.LoginPage })));
 const SettingsPage = lazy(() => import('@/pages/settings').then((module) => ({ default: module.SettingsPage })));
@@ -35,7 +36,7 @@ function Screen({ screen, channel, onLoggedIn, onSignOut }: Props) {
     case 'following': return <FollowingPage />;
     case 'playlists': return <PlaylistsPage />;
     case 'library': return <LibraryPage />;
-    case 'channel': return channel ? <FeedPage source={{ kind: 'channel', id: channel.id, name: channel.name }} /> : <Home />;
+    case 'channel': return channel ? <ChannelPage id={channel.id} name={channel.name} /> : <Home />;
     default: return isListScreen(screen) ? <ListPage section={screen} /> : <Home />;
   }
 }

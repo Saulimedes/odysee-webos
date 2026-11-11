@@ -24,22 +24,33 @@ describe('settings', () => {
     expect(getSetting('autoplay')).toBe(true);
   });
 
+  it.each(['odysee', 'pulse'])('ignores a stored loading animation that is not offered any more, like %s', async (stored) => {
+    localStorage.setItem('loaderStyle', JSON.stringify(stored));
+    const { getSetting, setSetting } = await import('./settings');
+    expect(getSetting('loaderStyle')).toBe('ring');
+    setSetting('loaderStyle', 'ripple');
+    expect(getSetting('loaderStyle')).toBe('ripple');
+    vi.resetModules();
+    const again = await import('./settings');
+    expect(again.getSetting('loaderStyle')).toBe('ripple');
+  });
+
   it('migrates the old settings blob', async () => {
-    localStorage.setItem('odysee-settings', JSON.stringify({ autoplay: false, quality: '720', nsfw: true }));
+    localStorage.setItem('odysee-settings', JSON.stringify({ autoplay: false, aspectRatio: 'zoom', nsfw: true }));
     const { getSetting } = await import('./settings');
     expect(getSetting('autoplay')).toBe(false);
-    expect(getSetting('quality')).toBe('720');
+    expect(getSetting('aspectRatio')).toBe('zoom');
     expect(getSetting('nsfw')).toBe(true);
   });
 
   it('survives a broken legacy blob and a failing storage', async () => {
     localStorage.setItem('odysee-settings', '{');
     const { getSetting, setSetting } = await import('./settings');
-    expect(getSetting('quality')).toBe('auto');
+    expect(getSetting('aspectRatio')).toBe('auto');
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('full'); });
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    setSetting('quality', '480');
-    expect(getSetting('quality')).toBe('480');
+    setSetting('aspectRatio', 'zoom');
+    expect(getSetting('aspectRatio')).toBe('zoom');
   });
 
   it('starts with the ring as loading animation, normal speed and an automatic aspect ratio', async () => {
@@ -74,6 +85,8 @@ describe('appearance', () => {
     const base = { themeMode: 'tinted', uiFont: 'default', cornerStyle: 'round', textScale: 1.2, tileScale: 0.9 };
     expect(computeAppearance({ ...base, accentColor: '#FFFFFF' }).vars['--accent-contrast']).toBe('#000000');
     expect(computeAppearance({ ...base, accentColor: '#000000' }).vars['--accent-contrast']).toBe('#ffffff');
+    expect(computeAppearance({ ...base, accentColor: '#FFFFFF' }).vars['--accent-contrast-rgb']).toBe('0, 0, 0');
+    expect(computeAppearance({ ...base, accentColor: '#000000' }).vars['--accent-contrast-rgb']).toBe('255, 255, 255');
     expect(computeAppearance({ ...base, accentColor: 'nonsense' }).vars['--accent']).toBe('#de0050');
     expect(computeAppearance({ ...base, accentColor: '#808080' }).vars['--bg']).toBe('#1a1a1a');
     expect(computeAppearance({ ...base, themeMode: 'light', accentColor: '#FFEB3B' }).vars['--accent-text']).toMatch(/^#/);
@@ -83,7 +96,7 @@ describe('appearance', () => {
     const { computeAppearance } = await import('./appearance');
     const base = { accentColor: '#DE0050', uiFont: 'default', cornerStyle: 'classic', textScale: 1, tileScale: 1 };
     const dark = computeAppearance({ ...base, themeMode: 'black' });
-    expect(dark.attrs).toEqual({ 'data-theme': 'black', 'data-icons': 'outlined', 'data-contrast': 'light' });
+    expect(dark.attrs).toEqual({ 'data-theme': 'black', 'data-icons': 'outlined', 'data-corners': 'classic', 'data-contrast': 'light' });
     expect(computeAppearance({ ...base, themeMode: 'black', accentColor: '#FFEB3B' }).attrs['data-contrast']).toBe('dark');
     expect(dark.vars['--text-rgb']).toBe('255, 255, 255');
     expect(dark.vars['--bg-rgb']).toBe('0, 0, 0');
@@ -133,6 +146,13 @@ describe('appearance', () => {
     expect(vars['--radius-md']).toBe('0px');
     expect(vars['--text-scale']).toBe('1.3');
     expect(computeAppearance({ themeMode: 'black', accentColor: '#DE0050', uiFont: 'nope', cornerStyle: 'nope', textScale: 1, tileScale: 1 }).vars['--radius-md']).toBe('8px');
+  });
+
+  it('names the corner style on the document so that the profile picture can follow it', async () => {
+    const { computeAppearance } = await import('./appearance');
+    const base = { themeMode: 'black', accentColor: '#DE0050', uiFont: 'default', textScale: 1, tileScale: 1 };
+    ['square', 'classic', 'round'].forEach((cornerStyle) => expect(computeAppearance({ ...base, cornerStyle }).attrs['data-corners']).toBe(cornerStyle));
+    expect(computeAppearance({ ...base, cornerStyle: 'nope' }).attrs['data-corners']).toBe('classic');
   });
 
   it('writes variables to the document, caches them and reacts to changes', async () => {

@@ -1,10 +1,9 @@
 {
   "odysee": "<svg viewBox=\"0 0 40 40\"><path class=\"a1\" d=\"M20 5L20 1.9\"/><path d=\"M27.5 7.01L29.05 4.32\"/><path d=\"M32.99 12.5L35.68 10.95\"/><path d=\"M35 20L38.1 20\"/><path d=\"M32.99 27.5L35.68 29.05\"/><path d=\"M27.5 32.99L29.05 35.68\"/><path d=\"M20 35L20 38.1\"/><path class=\"a6\" d=\"M12.5 32.99L10.95 35.68\"/><path class=\"a5\" d=\"M7.01 27.5L4.32 29.05\"/><path class=\"a4\" d=\"M5 20L1.9 20\"/><path class=\"a3\" d=\"M7.01 12.5L4.32 10.95\"/><path class=\"a2\" d=\"M12.5 7.01L10.95 4.32\"/></svg><i class=\"logo\"><img src=\"odysee-logo.png\" alt=\"\"></i>",
-  "pulse": "<i class=\"halo\"></i><i class=\"logo\"><img src=\"odysee-logo.png\" alt=\"\"></i>",
   "ring": "",
   "dots": "<i></i><i></i><i></i>",
   "arcs": "",
   "typing": "",
   "bounce": "<i></i><i></i><i></i>",
-  "ripple": "<i></i><i></i>"
+  "ripple": "<i></i><i></i><i></i><b></b>"
 }

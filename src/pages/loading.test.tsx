@@ -19,7 +19,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
   return { ...actual, lbryRpc: (method: string, params: object, priority?: number) => { calls.push({ method, params, priority }); return actual.lbryRpc(method, params, priority); } };
 });
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 
 const content = {
   status: 'success',

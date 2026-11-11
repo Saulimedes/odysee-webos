@@ -15,6 +15,7 @@ interface Props {
   emptyIcon?: ReactNode;
   progress?: (video: Video) => number;
   onLeftEdge?: () => void;
+  onTopEdge?: () => void;
   enabled?: boolean;
   width?: number;
   height?: number;

@@ -1,6 +1,6 @@
-import { IconArrowLeft, IconAspectRatio, IconBadgeHd, IconBorderCorners, IconBug, IconCircleDot, IconColorSwatch, IconGauge, IconHistory, IconHome, IconIcons, IconInfoCircle, IconLanguage, IconLayoutDashboard, IconLayoutGrid, IconLayoutSidebar, IconLoader2, IconMoonStars, IconPalette, IconPlayerPlay, IconPlayerSkipForward, IconShieldHalf, IconTextSize, IconTrash, IconTypography, IconUser, IconWorld, IconZoomIn, type Icon } from '@tabler/icons-react';
+import { IconArrowLeft, IconAspectRatio, IconBorderCorners, IconBug, IconCircleDot, IconColorSwatch, IconGauge, IconHistory, IconHome, IconIcons, IconInfoCircle, IconLanguage, IconLayoutDashboard, IconLayoutGrid, IconLayoutSidebar, IconLoader2, IconMoonStars, IconPalette, IconPlayerPlay, IconPlayerSkipForward, IconShieldHalf, IconTextSize, IconTrash, IconTypography, IconUser, IconWorld, IconZoomIn, type Icon } from '@tabler/icons-react';
 import {
-  ACCENT_COLORS, ASPECT_RATIOS, CORNER_STYLES, HOMEPAGE_LANGUAGES, ICON_SCALES, ICON_VARIANTS, LOADER_STYLES, LOGO_BUTTONS, PLAYBACK_SPEEDS, TEXT_SCALES, THEME_MODES, TILE_SCALES, UI_FONTS, UI_LANGUAGES, VIDEO_QUALITIES,
+  ACCENT_COLORS, ASPECT_RATIOS, CORNER_STYLES, HOMEPAGE_LANGUAGES, ICON_SCALES, ICON_VARIANTS, LOADER_STYLES, LOGO_BUTTONS, PLAYBACK_SPEEDS, TEXT_SCALES, THEME_MODES, TILE_SCALES, UI_FONTS, UI_LANGUAGES,
   type SettingKey,
 } from '@/shared/config';
 import type { PickerOption } from '@/shared/ui';
@@ -64,9 +64,8 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     label: 'Playback',
     Icon: IconPlayerPlay,
     rows: [
-      { id: 'autoplay', Icon: IconPlayerSkipForward, kind: 'toggle', key: 'autoplay', label: 'Autoplay next video', hint: 'Play the next video of the channel when one ends' },
+      { id: 'autoplay', Icon: IconPlayerSkipForward, kind: 'toggle', key: 'autoplay', label: 'Autoplay next video', hint: 'Play the next video of the list, or a related one, when one ends' },
       { id: 'resume', Icon: IconHistory, kind: 'toggle', key: 'resume', label: 'Resume playback', hint: 'Continue where you stopped, and keep the Continue Watching row' },
-      { id: 'quality', Icon: IconBadgeHd, kind: 'choice', key: 'quality', label: 'Video Quality', hint: 'Auto uses the original file', options: VIDEO_QUALITIES.map((quality) => ({ code: quality.code, name: quality.name })) },
       { id: 'aspectRatio', Icon: IconAspectRatio, kind: 'choice', key: 'aspectRatio', label: 'Aspect Ratio', hint: 'How video fills the screen. You can change it in the player too', options: ASPECT_RATIOS.map((aspect) => ({ code: aspect.code, name: aspect.name })) },
       { id: 'playbackSpeed', Icon: IconGauge, kind: 'choice', key: 'playbackSpeed', label: 'Playback Speed', hint: 'The speed videos start with. You can change it in the player too', options: PLAYBACK_SPEEDS },
       { id: 'osdBackButton', Icon: IconArrowLeft, kind: 'toggle', key: 'osdBackButton', label: 'Back Button', hint: 'Shows a back arrow at the top left of the player controls. The Back key of the remote works either way' },

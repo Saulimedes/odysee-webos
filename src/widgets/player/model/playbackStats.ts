@@ -4,11 +4,11 @@ import type { Video } from '@/entities/video';
 export interface StatRow { label: string; value: string }
 export interface StatsContext {
   video: Video;
-  quality: string;
   aspect: string;
   speed: number;
   buffering: boolean;
   sourceUrl: string;
+  adaptive?: boolean;
   version: string;
 }
 export interface StatsRate { at: number; time: number; start: number; end: number; fill: number }
@@ -52,8 +52,10 @@ function host(url: string) {
   try { return new URL(url).host; } catch { return 'unknown'; }
 }
 
-function bitrate(video: Video) {
-  return video.size && video.duration > 0 ? `about ${fixed((video.size * 8) / video.duration / 1e6, 2)} Mbit/s (original file)` : 'unknown';
+function bitrate(video: Video, adaptive?: boolean) {
+  const original = video.size && video.duration > 0 ? `${fixed((video.size * 8) / video.duration / 1e6, 2)} Mbit/s` : '';
+  if (adaptive) return original ? `chosen by the player (original file about ${original})` : 'chosen by the player';
+  return original ? `about ${original} (original file)` : 'unknown';
 }
 
 export function collectStats(element: HTMLVideoElement, context: StatsContext, rate: StatsRate | null): StatRow[] {
@@ -68,9 +70,9 @@ export function collectStats(element: HTMLVideoElement, context: StatsContext, r
   const duration = Number.isFinite(element.duration) ? element.duration : video.duration;
   return [
     { label: 'Video', value: `${video.id.slice(0, 10)} (${video.claimName})` },
-    { label: 'Stream', value: `${context.quality === 'auto' ? 'original file' : `transcoded ${context.quality}p`} from ${host(source)}` },
+    { label: 'Stream', value: `${context.adaptive ? 'adaptive stream (HLS)' : 'original file'} from ${host(source)}` },
     { label: 'File', value: [video.mediaType, video.size ? `${fixed(video.size / 1048576)} MB` : ''].filter(Boolean).join(', ') || 'unknown' },
-    { label: 'Bitrate', value: bitrate(video) },
+    { label: 'Bitrate', value: bitrate(video, context.adaptive) },
     { label: 'Resolution', value: `${resolution}${listed}` },
     { label: 'Aspect', value: `${element.videoHeight ? fixed(element.videoWidth / element.videoHeight, 2) : '-'} (${context.aspect})` },
     { label: 'Viewport', value: `${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio || 1}x` },

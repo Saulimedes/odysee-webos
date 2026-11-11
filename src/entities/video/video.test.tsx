@@ -2,14 +2,17 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { claim, mockFetch, rpcResult, video } from '../../../tests/helpers';
 import { normalizeVideo, normalizeVideos, parseClaim } from './model/claim';
-import { streamSources } from './lib/media';
+import { bestVariant, fileUrl, playlistUrl } from './lib/media';
 import { VideoCard } from './ui/VideoCard';
 import type { Video } from './model/types';
 
 describe('parseClaim', () => {
   it('maps a claim to a trimmed video', () => {
     const parsed = parseClaim(claim('abc', 'Hello') as never);
-    expect(parsed).toMatchObject({ id: 'abc', title: 'Hello', duration: 120, height: 720, channelId: 'chan', channelName: 'chan', channelTitle: 'Channel', releaseTime: 1700000100, hash: 'abcdef123456', claimName: 'name-abc' });
+    expect(parsed).toMatchObject({ id: 'abc', title: 'Hello', duration: 120, height: 720, channelId: 'chan', channelName: 'chan', channelTitle: 'Channel', releaseTime: 1700000100, claimName: 'name-abc' });
+    expect(parsed).not.toHaveProperty('hash');
+    expect(parsed.sdHash).toBeUndefined();
+    expect(parseClaim(claim('abc', 'Hello', { value: { source: { sd_hash: 'sd1' } } }) as never).sdHash).toBe('sd1');
     expect(parsed).not.toHaveProperty('description');
   });
 
@@ -25,8 +28,8 @@ describe('normalizeVideo', () => {
   it('accepts the current shape', () => expect(normalizeVideo(video('a'))).toMatchObject({ id: 'a', thumb: 'https://thumbs.odycdn.com/a.webp' }));
 
   it('migrates the old stored shape', () => {
-    const migrated = normalizeVideo({ id: 'o', title: 'Old', thumbnail: 'https://x/t.png', channelThumbnail: 'https://x/c.png', _claimName: 'old-name', _sourceHash: 'h', duration: '90' });
-    expect(migrated).toMatchObject({ id: 'o', thumb: 'https://x/t.png', channelThumb: 'https://x/c.png', claimName: 'old-name', hash: 'h', duration: 90 });
+    const migrated = normalizeVideo({ id: 'o', title: 'Old', thumbnail: 'https://x/t.png', channelThumbnail: 'https://x/c.png', _claimName: 'old-name', duration: '90' });
+    expect(migrated).toMatchObject({ id: 'o', thumb: 'https://x/t.png', channelThumb: 'https://x/c.png', claimName: 'old-name', duration: 90 });
   });
 
   it('rejects unusable entries', () => {
@@ -37,32 +40,137 @@ describe('normalizeVideo', () => {
     expect(normalizeVideos([video('a'), { id: 1 }])).toHaveLength(1);
   });
 
+  it('keeps the source hash when it is a string', () => {
+    expect(normalizeVideo(video('a', { sdHash: 'sd1' }))?.sdHash).toBe('sd1');
+    expect(normalizeVideo(video('a', { sdHash: 5 }))?.sdHash).toBeUndefined();
+    expect(normalizeVideo(video('a', { sdHash: '' }))?.sdHash).toBeUndefined();
+  });
+
   it('fills defaults', () => {
     expect(normalizeVideo({ id: 'a', claimName: 'n' })).toMatchObject({ title: 'Untitled', channelName: 'Anonymous', channelTitle: 'Anonymous', thumb: null, duration: 0 });
     expect(normalizeVideo({ id: 'a', claimName: 'n', channelName: 'x' })?.channelTitle).toBe('x');
   });
 });
 
-describe('streamSources', () => {
+describe('fileUrl', () => {
   const sample = video('id1') as Video;
-  const original = 'https://odysee.com/$/download/name-id1/id1';
-  const legacy = 'https://cdn.lbryplayer.xyz/api/v3/streams/free/name-id1/id1/abcdef';
 
-  it('plays the original through the signed redirect of the website, with the old host as the last resort', () => {
-    expect(streamSources(sample)).toEqual([original, legacy]);
-  });
-
-  it('tries the transcoded endpoint first for explicit qualities', () => {
-    expect(streamSources(sample, '720')).toEqual(['https://cdn.lbryplayer.xyz/api/v4/streams/tc/name-id1/id1/abcdef?quality=720p', original, legacy]);
-  });
-
-  it('falls back on bad quality values and missing hashes', () => {
-    expect(streamSources(sample, 'weird')).toEqual([original, legacy]);
-    expect(streamSources({ ...sample, hash: undefined })[1]).toMatch(/id1\/$/);
+  it('plays the original through the signed redirect of the website', () => {
+    expect(fileUrl(sample)).toBe('https://odysee.com/$/download/name-id1/id1');
   });
 
   it('writes claim names so they stay one path segment', () => {
-    expect(streamSources({ ...sample, claimName: 'a b\u00e9' })[0]).toBe('https://odysee.com/$/download/a%20b%C3%A9/id1');
+    expect(fileUrl({ ...sample, claimName: 'a b\u00e9' })).toBe('https://odysee.com/$/download/a%20b%C3%A9/id1');
+  });
+});
+
+describe('playlistUrl', () => {
+  it('names the transcoded copy of the stream server by claim and source hash', () => {
+    expect(playlistUrl(video('id1') as Video, 'sd1')).toBe('https://player.odycdn.com/v6/streams/id1/sd1/master.m3u8');
+  });
+});
+
+describe('bestVariant', () => {
+  const BASE = 'https://player.odycdn.com/v6/streams/id1/sd1/master.m3u8';
+  const entry = (bandwidth: number, uri: string, extra = '') => `#EXT-X-STREAM-INF:${extra}BANDWIDTH=${bandwidth},RESOLUTION=1x1\n${uri}`;
+
+  it('picks the rendition with the highest bandwidth wherever it is listed, next to the master', () => {
+    expect(bestVariant(`#EXTM3U\n${entry(300, 'v3.m3u8')}\n\n${entry(4000, 'v0.m3u8')}\n\n${entry(900, 'v2.m3u8')}\n`, BASE)).toBe('https://player.odycdn.com/v6/streams/id1/sd1/v0.m3u8');
+  });
+
+  it('reads absolute addresses and Windows line ends, and does not take the average for the peak', () => {
+    const master = ['#EXTM3U', entry(100, 'low.m3u8'), entry(200, 'https://cdn.example/high.m3u8', 'AVERAGE-BANDWIDTH=9000,'), ''].join('\r\n');
+    expect(bestVariant(master, BASE)).toBe('https://cdn.example/high.m3u8');
+  });
+
+  it('finds nothing in a playlist without usable renditions', () => {
+    expect(bestVariant('#EXTM3U\n', BASE)).toBeUndefined();
+    expect(bestVariant('#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=1x1\nv0.m3u8\n', BASE)).toBeUndefined();
+    expect(bestVariant('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5\n#EXT-X-ENDLIST\n', BASE)).toBeUndefined();
+    expect(bestVariant('#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=5', BASE)).toBeUndefined();
+  });
+});
+
+describe('resolveSource', () => {
+  const PLAYLIST = 'https://player.odycdn.com/v6/streams/id1/sd1/master.m3u8';
+  const START = 'https://player.odycdn.com/v6/streams/id1/sd1/v0.m3u8';
+  const MASTER_TEXT = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=215600,RESOLUTION=256x144\nv3.m3u8\n\n#EXT-X-STREAM-INF:BANDWIDTH=4026000,RESOLUTION=1920x1080,CODECS="avc1.4d402a,mp4a.40.2"\nv0.m3u8\n';
+  const known = video('id1', { sdHash: 'sd1' }) as Video;
+  const playlist = (status = 200, type = 'application/x-mpegurl', body = MASTER_TEXT) => new Response(status === 200 ? body : null, { status, headers: { 'Content-Type': type } });
+  let resolveSource: typeof import('./lib/media').resolveSource;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    ({ resolveSource } = await import('./lib/media'));
+  });
+
+  it('asks the stream server for the transcoded copy and starts on its best rendition when there is one', async () => {
+    const spy = mockFetch(() => playlist());
+    expect(await resolveSource(known)).toEqual({ kind: 'hls', url: PLAYLIST, start: START });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][0]).toBe(PLAYLIST);
+    expect(spy.mock.calls[0][1]).not.toHaveProperty('method');
+    expect(spy.mock.calls[0][1]).not.toHaveProperty('cache');
+  });
+
+  it('plays the file when the playlist names no rendition', async () => {
+    mockFetch(() => playlist(200, 'application/x-mpegurl', '#EXTM3U\n'));
+    expect(await resolveSource(known)).toEqual({ kind: 'file', url: fileUrl(known) });
+  });
+
+  it('plays the file when there is no transcoded copy, and does not ask again for a while', async () => {
+    const spy = mockFetch(() => playlist(404));
+    expect(await resolveSource(known)).toEqual({ kind: 'file', url: fileUrl(known) });
+    expect(await resolveSource(known)).toEqual({ kind: 'file', url: fileUrl(known) });
+    expect(spy).toHaveBeenCalledTimes(1);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.now() + 6 * 60 * 1000);
+    await resolveSource(known);
+    vi.useRealTimers();
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not take an answer that is not a playlist for one', async () => {
+    mockFetch(() => playlist(200, 'text/plain'));
+    expect(await resolveSource(known)).toEqual({ kind: 'file', url: fileUrl(known) });
+  });
+
+  it('treats 403 like a missing copy', async () => {
+    mockFetch(() => playlist(403));
+    expect((await resolveSource(known)).kind).toBe('file');
+  });
+
+  it('plays the file when the server refuses the lookup, and asks again next time since a refusal is not a missing copy', async () => {
+    const spy = mockFetch(() => playlist(429, 'text/plain'));
+    expect(await resolveSource(known)).toEqual({ kind: 'file', url: fileUrl(known) });
+    spy.mockImplementation(async () => playlist());
+    expect((await resolveSource(known)).kind).toBe('hls');
+  });
+
+  it('plays the file when the server fails or cannot be reached', async () => {
+    const spy = mockFetch(() => playlist(503));
+    expect((await resolveSource(known)).kind).toBe('file');
+    spy.mockImplementation(async () => { throw new TypeError('Failed to fetch'); });
+    expect((await resolveSource(known)).kind).toBe('file');
+    spy.mockImplementation(async () => playlist());
+    expect((await resolveSource(known)).kind).toBe('hls');
+  });
+
+  it('asks the claim for its source hash once when the video was stored without it', async () => {
+    const withHash = claim('id1', 'T', { value: { title: 'T', source: { sd_hash: 'fromclaim' } } });
+    const spy = mockFetch((url) => (url.includes('player.odycdn.com') ? playlist() : rpcResult({ items: [withHash] })));
+    const bare = video('id1') as Video;
+    expect(await resolveSource(bare)).toEqual({ kind: 'hls', url: 'https://player.odycdn.com/v6/streams/id1/fromclaim/master.m3u8', start: 'https://player.odycdn.com/v6/streams/id1/fromclaim/v0.m3u8' });
+    await resolveSource(bare);
+    expect(spy.mock.calls.filter(([url]) => String(url).includes('proxy'))).toHaveLength(1);
+  });
+
+  it('plays the file without asking when no source hash can be found', async () => {
+    const spy = mockFetch(() => rpcResult({ items: [claim('id1')] }));
+    expect(await resolveSource(video('id1') as Video)).toEqual({ kind: 'file', url: fileUrl(known) });
+    spy.mockImplementation(async () => { throw new TypeError('offline'); });
+    expect((await resolveSource(video('id2') as Video)).kind).toBe('file');
+    expect(spy.mock.calls.some(([url]) => String(url).includes('player.odycdn.com'))).toBe(false);
   });
 });
 
@@ -263,6 +371,41 @@ describe('queries', () => {
     mockFetch(() => rpcResult({ items: [claim('b'), claim('a')] }));
     expect((await resolveVideos(['a', 'missing', 'b'])).map((entry) => entry.id)).toEqual(['a', 'b']);
     expect(await resolveVideos([])).toEqual([]);
+  });
+
+  it('asks for at most 50 claim ids at a time, because the API silently cuts longer lists', async () => {
+    const { resolveVideos } = await import('./api/queries');
+    const sizes: number[] = [];
+    mockFetch((_url, init) => {
+      const { claim_ids: ids, page_size: pageSize } = JSON.parse(String(init?.body)).params;
+      sizes.push(ids.length);
+      expect(pageSize).toBeLessThanOrEqual(50);
+      return rpcResult({ items: ids.map((id: string) => claim(id)) });
+    });
+    const ids = Array.from({ length: 120 }, (_, index) => `id${index}`);
+    const videos = await resolveVideos(ids);
+    expect(videos.map((entry) => entry.id)).toEqual(ids);
+    expect(sizes.sort((a, b) => a - b)).toEqual([20, 50, 50]);
+  });
+
+  it('asks for the chunks of a long list at the same time, unless it is a background lookup', async () => {
+    const { resolveVideos } = await import('./api/queries');
+    let running = 0;
+    let most = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const { params } = JSON.parse(String(init?.body));
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      return new Response(JSON.stringify(rpcResult({ items: params.claim_ids.map((id: string) => claim(id)) })), { status: 200 });
+    }));
+    const ids = Array.from({ length: 120 }, (_, index) => `p${index}`);
+    await resolveVideos(ids);
+    expect(most).toBeGreaterThan(1);
+    most = 0;
+    expect((await resolveVideos(ids.map((id) => `b${id}`), { background: true })).map((entry) => entry.id)).toEqual(ids.map((id) => `b${id}`));
+    expect(most).toBe(1);
   });
 
   it('skips empty id lists and peeks persisted rows', async () => {

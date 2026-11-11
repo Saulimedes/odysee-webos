@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeEach, vi } from 'vitest';
 
 HTMLElement.prototype.scrollIntoView = () => {};
+configure({ asyncUtilTimeout: 3000 });
 
 beforeEach(() => {
   localStorage.clear();

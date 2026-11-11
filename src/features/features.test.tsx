@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { claim, flush, mockFetch, rpcResult, video } from '../../tests/helpers';
+import { claim, flush, jsonResponse, mockFetch, rpcResult, video } from '../../tests/helpers';
 import type { Video } from '@/entities/video';
 
 beforeEach(() => { vi.resetModules(); vi.useRealTimers(); });
@@ -179,15 +179,99 @@ describe('collections', () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it('syncs lists of more than 50 videos, in lookups of 50', async () => {
+    await loginAs();
+    const lists = await import('./collections');
+    const { collections } = await import('./collections/model/collections');
+    const ids = Array.from({ length: 90 }, (_, index) => `w${index}`);
+    const sizes: number[] = [];
+    mockFetch((_url, init) => {
+      const { method, params } = JSON.parse(String(init?.body));
+      if (method === 'preference_get') return rpcResult({ shared: { value: { builtinCollections: { watchlater: { items: ids.map((id) => `lbry://n#${id}`) } } } } });
+      sizes.push(params.claim_ids.length);
+      return rpcResult({ items: params.claim_ids.map((id: string) => claim(id)) });
+    });
+    await lists.syncCollections(['watchLater']);
+    expect(collections.get().watchLater.map((entry) => entry.id)).toEqual(ids);
+    expect(sizes.sort((a, b) => a - b)).toEqual([40, 50]);
+  });
+
+  it('does not overwrite a list that changed while it was syncing, and still syncs the other one', async () => {
+    await loginAs();
+    const lists = await import('./collections');
+    const { collections } = await import('./collections/model/collections');
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const { method, params } = JSON.parse(String(init?.body));
+      if (method === 'preference_get') {
+        return jsonResponse(rpcResult({ shared: { value: { builtinCollections: { watchlater: { items: ['lbry://a#w1'] }, favorites: { items: ['lbry://b#f1'] } } } } }));
+      }
+      if (method === 'claim_search') {
+        await gate;
+        return jsonResponse(rpcResult({ items: params.claim_ids.map((id: string) => claim(id)) }));
+      }
+      return jsonResponse(rpcResult({}));
+    }));
+    const syncing = lists.syncCollections();
+    await flush();
+    lists.toggleInCollection('favorites', v('mine'));
+    release();
+    await syncing;
+    expect(collections.get().favorites.map((entry) => entry.id)).toEqual(['mine']);
+    expect(collections.get().watchLater.map((entry) => entry.id)).toEqual(['w1']);
+  });
+
+  it('does not bring back a list that was cleared while it was syncing, such as after signing out', async () => {
+    await loginAs();
+    const lists = await import('./collections');
+    const { collections } = await import('./collections/model/collections');
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const { method, params } = JSON.parse(String(init?.body));
+      if (method === 'preference_get') return jsonResponse(rpcResult({ shared: { value: { builtinCollections: { favorites: { items: ['lbry://b#f1'] } } } } }));
+      await gate;
+      return jsonResponse(rpcResult({ items: params.claim_ids.map((id: string) => claim(id)) }));
+    }));
+    const syncing = lists.syncCollections(['favorites']);
+    await flush();
+    lists.clearCollections(['watchLater', 'favorites']);
+    release();
+    await syncing;
+    expect(collections.get().favorites).toEqual([]);
+  });
+
+  it('looks up a long synced list one chunk at a time, so that the rows on screen keep their request slots', async () => {
+    await loginAs();
+    const lists = await import('./collections');
+    const ids = Array.from({ length: 130 }, (_, index) => `w${index}`);
+    let running = 0;
+    let most = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const { method, params } = JSON.parse(String(init?.body));
+      if (method === 'preference_get') return jsonResponse(rpcResult({ shared: { value: { builtinCollections: { watchlater: { items: ids.map((id) => `lbry://n#${id}`) } } } } }));
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      running -= 1;
+      return jsonResponse(rpcResult({ items: params.claim_ids.map((id: string) => claim(id)) }));
+    }));
+    await lists.syncCollections(['watchLater']);
+    expect(most).toBe(1);
+  });
+
   it('keeps local lists when the cloud has none or lookups fail', async () => {
     await loginAs();
     const lists = await import('./collections');
     const { collections } = await import('./collections/model/collections');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch(() => { throw new Error('offline'); });
     lists.toggleInCollection('favorites', v('keep'));
+    await flush();
     mockFetch(() => rpcResult({ shared: { value: {} } }));
     await lists.syncCollections();
     expect(collections.get().favorites).toHaveLength(1);
-    vi.spyOn(console, 'error').mockImplementation(() => {});
     mockFetch((_url, init) => (JSON.parse(String(init?.body)).method === 'preference_get'
       ? rpcResult({ shared: { value: { builtinCollections: { favorites: { items: ['lbry://x#x1'] } } } } })
       : { error: { message: 'down' } }));
@@ -230,6 +314,25 @@ describe('following', () => {
     expect(await following.getSubscriptions()).toHaveLength(2);
     expect((await following.getFollowingVideos(1, 20)).map((entry) => entry.id)).toEqual(['a']);
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the following row from storage at the next start, and marks it stale', async () => {
+    await loginAs();
+    const following = await import('./following');
+    expect(following.peekFollowingVideos(1, 20)).toBeUndefined();
+    mockFetch((url) => (url.includes('/subscription/list') ? { success: true, data: [{ claim_id: 'c1' }] } : rpcResult({ items: [claim('a'), claim('b')] })));
+    await following.getFollowingVideos(1, 20);
+    expect(following.peekFollowingVideos(1, 20)).toMatchObject({ stale: false, videos: [{ id: 'a' }, { id: 'b' }] });
+    expect(following.peekFollowingVideos(1, 10)).toBeUndefined();
+    vi.resetModules();
+    await loginAs();
+    const next = await import('./following');
+    expect(next.peekFollowingVideos(1, 20)?.videos.map((entry) => entry.id)).toEqual(['a', 'b']);
+    const stored = JSON.parse(localStorage.getItem('cache:acct:subscriptions') as string);
+    localStorage.setItem('cache:acct:subscriptions', JSON.stringify({ ...stored, t: Date.now() - 3600000 }));
+    vi.resetModules();
+    await loginAs();
+    expect((await import('./following')).peekFollowingVideos(1, 20)?.stale).toBe(true);
   });
 
   it('returns an empty feed when nobody is followed and tolerates failures', async () => {

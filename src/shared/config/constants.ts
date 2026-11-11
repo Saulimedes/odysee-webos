@@ -24,8 +24,8 @@ export const ODYSEE_PROXY_URL = IS_DEV ? '/odysee-proxy/api/v1/proxy' : 'https:/
 export const LBRY_COM_URL = IS_DEV ? '/lbry-api-com' : 'https://api.lbry.com';
 export const ODYSEE_API_URL = 'https://api.odysee.com';
 export const LIGHTHOUSE_URL = 'https://lighthouse.lbry.com/search';
-export const LBRY_CDN_URL = 'https://cdn.lbryplayer.xyz';
 export const ODYSEE_SITE_URL = 'https://odysee.com';
+export const PLAYER_SERVER_URL = 'https://player.odycdn.com';
 export const CONTENT_API_URL = 'https://odysee.com/$/api/content/v2/get';
 export const THUMBNAIL_OPTIMIZER_URL = 'https://thumbnails.odycdn.com/optimize';
 export const THUMBNAIL_CARD_URL = 'https://thumbnails.odycdn.com/card';
@@ -111,8 +111,6 @@ export const LOADER_STYLES = [
   { code: 'typing', name: 'Growing Dots' },
   { code: 'bounce', name: 'Bouncing Dots' },
   { code: 'ripple', name: 'Ripple' },
-  { code: 'odysee', name: 'Odysee Wheel' },
-  { code: 'pulse', name: 'Odysee Pulse' },
 ];
 
 export const CORNER_STYLES = [
@@ -167,16 +165,6 @@ export const ASPECT_RATIOS = [
 
 export const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => ({ code: speed, name: `${speed}\u00d7` }));
 
-export const VIDEO_QUALITIES = [
-  { code: 'auto', name: 'Auto', height: 0 },
-  { code: '2160', name: '4K (2160p)', height: 2160 },
-  { code: '1440', name: '1440p', height: 1440 },
-  { code: '1080', name: '1080p', height: 1080 },
-  { code: '720', name: '720p', height: 720 },
-  { code: '480', name: '480p', height: 480 },
-  { code: '360', name: '360p', height: 360 },
-];
-
 export const SETTING_DEFAULTS = {
   uiLanguage: 'auto',
   homepageLanguage: 'auto',
@@ -196,7 +184,6 @@ export const SETTING_DEFAULTS = {
   aspectRatio: 'auto',
   playbackSpeed: 1,
   autoplay: true,
-  quality: 'auto',
   nsfw: false,
   resume: true,
 };

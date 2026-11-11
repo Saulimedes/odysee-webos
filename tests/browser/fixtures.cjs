@@ -8,7 +8,7 @@ const claim = (id, title, extra = {}) => ({
   claim_id: id,
   name: `video-${id}`,
   timestamp: 1760000000,
-  value: { title, release_time: '1760000000', thumbnail: { url: THUMB }, video: { duration: 600, height: 720 }, source: { hash: 'abcdef123456' } },
+  value: { title, release_time: '1760000000', thumbnail: { url: THUMB }, video: { duration: 600, height: 720 }, source: { sd_hash: 'f'.repeat(96) } },
   signing_channel: CHANNEL,
   ...extra,
 });
@@ -40,7 +40,8 @@ function fixture(url, postData = '', method = 'GET') {
   if (method === 'OPTIONS') return { status: 204, contentType: 'text/plain', body: '' };
   const stream = () => ({ contentType: 'video/webm', body: fs.readFileSync(path.join(__dirname, 'fixture.webm')) });
   if (parsed.hostname === 'odysee.com' && parsed.pathname.startsWith('/$/download/')) return stream();
-  if (parsed.hostname === 'cdn.lbryplayer.xyz') return stream();
+  if (parsed.hostname === 'player.odycdn.com' && parsed.pathname.endsWith('/master.m3u8')) return { contentType: 'application/x-mpegurl', body: '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,RESOLUTION=1280x720\nv0.m3u8\n' };
+  if (parsed.hostname === 'player.odycdn.com' && parsed.pathname.endsWith('/v0.m3u8')) return { contentType: 'application/x-mpegurl', body: '#EXTM3U\n' };
   if (parsed.hostname === 'thumbs.odycdn.com' || parsed.hostname === 'thumbnails.odycdn.com' || parsed.hostname === 'thumbnails.lbry.com') {
     return { contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="90"><rect width="160" height="90" fill="blue"/></svg>' };
   }

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CARD_GAP, KEY, PAGE_PADDING, SIDEBAR_WIDTH, rowCardMetrics, rowHeight, useSetting, type CardMetrics } from '@/shared/config';
-import { PRIORITY, isPointerDriven, useKeys, useNav, useRemembered } from '@/shared/lib';
+import { PRIORITY, isPointerDriven, useKeys, useNav, useOkPress, useRemembered } from '@/shared/lib';
 import { OdyseeIcon } from '@/shared/ui';
 import { VideoCard, type Video } from '@/entities/video';
 
@@ -51,11 +51,13 @@ interface RowViewProps {
   settled: boolean;
   onPick: (rowId: string, index: number) => void;
   onHover: (rowId: string, index: number) => void;
+  onMenu: (rowId: string, index: number) => void;
 }
 
-const RowView = memo(function RowView({ entry, selected, scroll, active, top, rowH, step, metrics, viewportCards, settled, onPick, onHover }: RowViewProps) {
+const RowView = memo(function RowView({ entry, selected, scroll, active, top, rowH, step, metrics, viewportCards, settled, onPick, onHover, onMenu }: RowViewProps) {
   const onSelect = useCallback((index: number) => onPick(entry.id, index), [onPick, entry.id]);
   const onPoint = useCallback((index: number) => onHover(entry.id, index), [onHover, entry.id]);
+  const onContext = useCallback((index: number) => onMenu(entry.id, index), [onMenu, entry.id]);
   const offset = Math.max(0, scroll - 1) * step;
   const buffer = settled ? BUFFER_CARDS : 0;
   const from = Math.max(0, scroll - (settled ? BUFFER_CARDS : 1));
@@ -73,6 +75,7 @@ const RowView = memo(function RowView({ entry, selected, scroll, active, top, ro
           progress={entry.progress?.(video)}
           onSelect={onSelect}
           onHover={onPoint}
+          onMenu={onContext}
         />
       </div>,
     );
@@ -148,7 +151,13 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
     if (at < 0) return;
     setActiveRow(at);
     setColumn(rowId, index);
-    if (present[at].videos[index]) nav.play(present[at].videos[index]);
+    if (present[at].videos[index]) nav.play(present[at].videos[index], present[at].videos);
+  };
+
+  const menuRef = useRef<(rowId: string, index: number) => void>(() => undefined);
+  menuRef.current = (rowId, index) => {
+    const video = present.find((candidate) => candidate.id === rowId)?.videos[index];
+    if (video) nav.openMenu(video);
   };
 
   const hoverRef = useRef<(rowId: string, index: number) => void>(() => undefined);
@@ -158,6 +167,8 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
     if (at !== activeRow) setActiveRow(at);
     if ((indexes[rowId] || 0) !== index) setColumn(rowId, index);
   };
+
+  const ok = useOkPress();
 
   useKeys((event) => {
     if (!row) return false;
@@ -172,15 +183,22 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
       case KEY.RIGHT:
         if (rowIndex < row.videos.length - 1) setColumn(row.id, rowIndex + 1);
         return true;
-      case KEY.ENTER:
-        if (row.videos[rowIndex]) nav.play(row.videos[rowIndex]);
+      case KEY.ENTER: {
+        const video = row.videos[rowIndex];
+        if (video) ok.down(event, { press: () => nav.play(video, row.videos), hold: () => nav.openMenu(video) });
         return true;
+      }
       default: return false;
     }
-  }, { enabled: enabled && !nav.sidebarFocused, priority: PRIORITY.content });
+  }, {
+    enabled: enabled && !nav.sidebarFocused,
+    priority: PRIORITY.content,
+    onKeyUp: (event) => { if (event.keyCode !== KEY.ENTER) return false; ok.up(); return true; },
+  });
 
   const pick = useCallback((rowId: string, index: number) => pickRef.current(rowId, index), []);
   const hover = useCallback((rowId: string, index: number) => hoverRef.current(rowId, index), []);
+  const menu = useCallback((rowId: string, index: number) => menuRef.current(rowId, index), []);
   const visibleRows = Math.max(1, Math.floor((window.innerHeight - ROW_TOP) / rowH));
   // The cursor must not scroll: content would slide under it and the next card would be picked
   const viewRow = useRef(activeRow);
@@ -210,6 +228,7 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
         settled={settled}
         onPick={pick}
         onHover={hover}
+        onMenu={menu}
       />,
     );
   }

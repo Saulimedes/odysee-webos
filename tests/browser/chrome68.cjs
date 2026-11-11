@@ -14,6 +14,7 @@ async function main() {
   let browser;
   let page;
   const errors = [];
+  const streamRequests = [];
   try {
     let ready = false;
     for (let attempt = 0; attempt < 100; attempt++) {
@@ -33,9 +34,14 @@ async function main() {
     page = await browser.newPage();
     await page.setViewport({ width: 1920, height: 1080 });
     page.on('pageerror', (error) => errors.push(error.message));
+    await page.evaluateOnNewDocument(() => {
+      const native = HTMLMediaElement.prototype.canPlayType;
+      HTMLMediaElement.prototype.canPlayType = function (type) { return window.claimHls && /mpegurl/i.test(type) ? 'maybe' : native.call(this, type); };
+    });
     await page.setRequestInterception(true);
     page.on('request', async (request) => {
       if (new URL(request.url()).hostname === '127.0.0.1') return request.continue();
+      if (new URL(request.url()).hostname === 'player.odycdn.com') streamRequests.push(new URL(request.url()).pathname.split('/').pop());
       try {
         const response = fixture(request.url(), request.postData(), request.method());
         if (!response) throw Error(`Unexpected external request: ${request.url()}`);
@@ -81,10 +87,28 @@ async function main() {
     await press(page, 'ArrowDown');
     assert.equal(await page.$eval('.card--active .card__title', (node) => node.textContent), 'Trending video 1-0');
 
+    const menuEntries = () => page.$$eval('.picker .pickerItem', (nodes) => nodes.map((node) => node.textContent));
+    await page.keyboard.down('Enter');
+    await page.waitForSelector('.picker', { timeout: 5000 });
+    await page.keyboard.up('Enter');
+    assert.deepEqual(await menuEntries(), ['Play', 'Add to Watch Later', 'Add to Favorites', 'Go to channel']);
+    assert.equal(await page.$('video.player__video'), null, 'holding OK opens the menu of the card instead of playing it');
+    await press(page, 'ArrowUp');
+    await press(page, 'Enter');
+    await page.waitForSelector('.channelHeader');
+    assert.equal(await page.$eval('.channelHeader h1', (node) => node.textContent), 'Fixture channel', 'the menu leads to the channel page');
+    await page.waitForSelector('.channelPage .card');
+    await press(page, 'Escape');
+    await page.waitForSelector('.videoRows .card');
+    assert.equal(await page.$eval('.card--active .card__title', (node) => node.textContent), 'Trending video 1-0');
+
+    await page.evaluate(() => { window.claimHls = true; });
     await press(page, 'Enter');
     await page.waitForSelector('video.player__video');
-    await page.waitForFunction(() => document.querySelector('video.player__video').currentTime > 0);
+    await page.waitForFunction(() => document.querySelector('video.player__video').currentTime > 0, { timeout: 40000 });
+    await page.evaluate(() => { window.claimHls = false; });
     assert.match(await page.$eval('video.player__video', (node) => node.src), /^https:\/\/odysee\.com\/\$\/download\/video-/, 'plays the original through the download address of the website');
+    assert.ok(streamRequests.includes('master.m3u8') && streamRequests.includes('v0.m3u8'), `looks for the transcoded stream, starts it on its best rendition, and asks for the file when the TV cannot play it (${streamRequests.join(',')})`);
 
     await page.waitForSelector('.timeline__handle');
     const track = await page.$eval('.timeline__track', (node) => { const rect = node.getBoundingClientRect(); return { x: rect.left, y: rect.top + rect.height / 2, width: rect.width }; });
@@ -114,11 +138,14 @@ async function main() {
     await page.waitForFunction((from) => document.querySelector('video.player__video').currentTime > from, { timeout: 10000 }, stopped);
     assert.ok(Math.abs((await clock()) - stopped) < 8, 'play continues where the video was paused');
 
-    const menuEntries = () => page.$$eval('.picker .pickerItem', (nodes) => nodes.map((node) => node.textContent));
-    await press(page, 'ArrowRight', 4);
+    await page.mouse.move(300, 300);
+    await page.waitForSelector('.player__controls--visible');
+    const gear = await page.$eval('.player__group--right .pbtn:last-child', (node) => { const rect = node.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
+    await page.mouse.move(gear.x, gear.y, { steps: 4 });
+    await page.waitForSelector('.player__group--right .pbtn--active');
     await press(page, 'Enter');
     await page.waitForSelector('.picker');
-    assert.deepEqual(await menuEntries(), ['Aspect RatioAuto', 'Playback Speed1\u00d7', 'Video QualityAuto']);
+    assert.deepEqual(await menuEntries(), ['Aspect RatioAuto', 'Playback Speed1\u00d7']);
     await press(page, 'ArrowDown');
     await press(page, 'Enter');
     await press(page, 'ArrowDown', 2);
@@ -130,7 +157,7 @@ async function main() {
     await press(page, 'Enter');
     assert.equal(await page.$eval('video.player__video', (node) => node.style.objectFit), 'cover', 'aspect menu zooms the video');
     await press(page, 'Enter');
-    assert.deepEqual(await menuEntries(), ['Aspect RatioZoom', 'Playback Speed1.5\u00d7', 'Video QualityAuto']);
+    assert.deepEqual(await menuEntries(), ['Aspect RatioZoom', 'Playback Speed1.5\u00d7']);
     await press(page, 'Escape', 2);
 
     await page.waitForFunction(() => !document.querySelector('.player__controls--visible'), { timeout: 15000 });
@@ -208,6 +235,28 @@ async function main() {
     await page.waitForFunction(() => !document.getElementById('boot'));
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'de');
     assert.ok((await page.$$eval('.sidebar__label', (nodes) => nodes.map((node) => node.textContent))).includes('Einstellungen'), 'the menu is in German');
+
+    await page.waitForSelector('.videoRow .card');
+    await press(page, 'Enter');
+    await page.waitForSelector('video.player__video');
+    await page.waitForSelector('.player__group .tabler-icon-player-track-next', { timeout: 10000 });
+    const toTheEnd = () => page.evaluate(() => {
+      const video = document.querySelector('video.player__video');
+      video.currentTime = Math.max(0, video.duration - 1);
+      return video.play();
+    });
+    await toTheEnd();
+    await page.waitForSelector('.player__upNext', { timeout: 15000 });
+    assert.equal(await page.$eval('.player__upNextTitle', (node) => node.textContent), 'Resolved found-1', 'the countdown names the related video');
+    await press(page, 'Escape');
+    assert.equal(await page.$('.player__upNext'), null, 'Back cancels the countdown');
+    assert.notEqual(await page.$('.player'), null, 'and stays in the player');
+    await toTheEnd();
+    await page.waitForSelector('.player__upNext', { timeout: 15000 });
+    await page.waitForFunction(() => document.querySelector('.player__title').textContent === 'Resolved found-1', { timeout: 15000 });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('odysee-watch-history') || '[]').some((entry) => entry.id === 'found-1'), { timeout: 15000 });
+    await press(page, 'Escape', 2);
+    await page.waitForSelector('.videoRows .card');
 
     assert.deepEqual(errors, []);
     console.log('Chrome 68: startup, rows, player, resume, continue watching, and settings passed.');

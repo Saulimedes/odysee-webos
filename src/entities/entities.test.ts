@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { flush, mockFetch, rpcResult } from '../../tests/helpers';
+import { flush, jsonResponse, mockFetch, rpcResult } from '../../tests/helpers';
 
 beforeEach(() => { vi.resetModules(); });
 
@@ -136,6 +136,24 @@ describe('category entity', () => {
     expect(parseHomepage(response as never, 'de').categories.map((category) => category.label)).toEqual(['Spiele']);
     expect(parseHomepage(response as never, 'cs').categories.map((category) => category.label)).toEqual(['Gaming']);
     expect(parseHomepage(response as never).categories.map((category) => category.label)).toEqual(['Gaming']);
+  });
+
+  it('asks only for the homepage of the chosen language, and for English when Odysee has none for it', async () => {
+    const spy = mockFetch(() => ({ status: 'success', data: { en: { categories: { GAMING: { label: 'Gaming', channelIds: ['a'], sortOrder: 1 } } } } }));
+    const { refreshHomepage, homepageLanguage } = await import('./category/api/homepage');
+    const { setSetting } = await import('@/shared/config');
+    setSetting('homepageLanguage', 'de');
+    await refreshHomepage(true).catch(() => undefined);
+    expect(String(spy.mock.calls[0][0])).toMatch(/content\/v2\/get\?hp=de$/);
+    setSetting('homepageLanguage', 'auto');
+    setSetting('uiLanguage', 'nl');
+    expect(homepageLanguage()).toBe('en');
+    await refreshHomepage(true);
+    expect(String(spy.mock.calls[1][0])).toMatch(/\?hp=en$/);
+    setSetting('uiLanguage', 'cs');
+    expect(homepageLanguage()).toBe('en');
+    setSetting('uiLanguage', 'auto');
+    setSetting('homepageLanguage', 'auto');
   });
 
   it('picks the homepage language from the setting, or from the app language', async () => {
@@ -412,6 +430,38 @@ describe('session entity', () => {
     expect(await updatePreferences((shared) => ({ ...shared, following: [{ uri: 'lbry://x#1' }] }))).toBe(true);
     expect(calls.slice(-2)).toEqual(['preference_get:get', 'preference_set:set']);
     expect((await getPreferences())?.following).toHaveLength(1);
+  });
+
+  it('applies updates that overlap one after another, so none of them is lost', async () => {
+    const { updatePreferences, getPreferences } = await import('./session/api/preferences');
+    await login();
+    let cloud: Record<string, unknown> = {};
+    const log: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const { method, params } = JSON.parse(String(init?.body));
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      if (method === 'preference_get') { log.push('get'); return jsonResponse(rpcResult({ shared: { value: cloud } })); }
+      log.push('set');
+      cloud = JSON.parse(params.value).value;
+      return jsonResponse(rpcResult({}));
+    }));
+    const first = updatePreferences((shared) => ({ ...shared, a: 1 }));
+    const second = updatePreferences((shared) => ({ ...shared, b: 2 }));
+    const read = getPreferences();
+    expect(await Promise.all([first, second])).toEqual([true, true]);
+    expect(cloud).toEqual({ a: 1, b: 2 });
+    expect(log).toEqual(['get', 'set', 'get', 'set']);
+    expect(await read).toEqual({ a: 1, b: 2 });
+  });
+
+  it('keeps writing after one update failed', async () => {
+    const { updatePreferences } = await import('./session/api/preferences');
+    await login();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockFetch(() => ({ error: { message: 'down' } }));
+    expect(await updatePreferences((shared) => shared)).toBe(false);
+    mockFetch((_url, init) => rpcResult(JSON.parse(String(init?.body)).method === 'preference_get' ? { shared: { value: {} } } : {}));
+    expect(await updatePreferences((shared) => shared)).toBe(true);
   });
 
   it('never overwrites preferences when they cannot be read', async () => {

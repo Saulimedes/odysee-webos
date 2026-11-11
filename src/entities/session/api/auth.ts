@@ -1,6 +1,6 @@
 import { LBRY_COM_URL } from '@/shared/config';
 import { t } from '@/shared/i18n';
-import { postForm, invalidate } from '@/shared/api';
+import { getJson, postForm, invalidate, withTimeout } from '@/shared/api';
 import { getToken, updateSession, clearSession, type User } from '../model/store';
 
 interface ApiResponse<T> { success?: boolean; data?: T; error?: string | { message?: string } }
@@ -14,8 +14,7 @@ export async function ensureToken() {
   const existing = getToken();
   if (existing) return existing;
   try {
-    const response = await fetch(`${LBRY_COM_URL}/user/new`);
-    const body = (await response.json()) as ApiResponse<{ auth_token: string }>;
+    const body = await getJson<ApiResponse<{ auth_token: string }>>(`${LBRY_COM_URL}/user/new`);
     if (body.success && body.data) {
       updateSession({ token: body.data.auth_token });
       return body.data.auth_token;
@@ -85,7 +84,7 @@ export async function signOut() {
   const token = getToken();
   if (token) {
     try {
-      await fetch(`${LBRY_COM_URL}/user/signout?${new URLSearchParams({ auth_token: token })}`, { method: 'POST' });
+      await withTimeout((signal) => fetch(`${LBRY_COM_URL}/user/signout?${new URLSearchParams({ auth_token: token })}`, { method: 'POST', signal }));
     } catch (error) {
       console.error('Sign out request failed', error);
     }

@@ -13,7 +13,7 @@ function element(props: Props = {}, ranges: [number, number][] = []) {
 }
 
 const video = { id: 'abcdef1234567890', title: 'T', thumb: null, duration: 100, height: 720, releaseTime: 1, channelName: 'c', channelTitle: 'c', claimName: 'my-video', size: 12500000, mediaType: 'video/mp4' } as Video;
-const context = (extra: Partial<StatsContext> = {}): StatsContext => ({ video, quality: 'auto', aspect: 'auto', speed: 1, buffering: false, sourceUrl: 'https://cdn.lbryplayer.xyz/x', version: '1.2.3', ...extra });
+const context = (extra: Partial<StatsContext> = {}): StatsContext => ({ video, aspect: 'auto', speed: 1, buffering: false, sourceUrl: 'https://cdn.lbryplayer.xyz/x', version: '1.2.3', ...extra });
 const value = (rows: { label: string; value: string }[], label: string) => rows.find((row) => row.label === label)?.value;
 
 afterEach(() => { vi.unstubAllGlobals(); });
@@ -64,10 +64,19 @@ describe('collectStats', () => {
     expect(value(rows, 'Engine')).toMatch(/app 1\.2\.3$/);
   });
 
-  it('names transcoded streams and copes with missing details', () => {
+  it('names an adaptive stream and keeps the size of the original file apart', () => {
+    const adaptive = context({ adaptive: true, sourceUrl: 'https://player.odycdn.com/v6/streams/a/b/master.m3u8' });
+    const rows = collectStats(element({ currentSrc: '' }), adaptive, null);
+    expect(value(rows, 'Stream')).toBe('adaptive stream (HLS) from player.odycdn.com');
+    expect(value(rows, 'Bitrate')).toBe('chosen by the player (original file about 1.00 Mbit/s)');
+    const bare = collectStats(element({ currentSrc: '' }), { ...adaptive, video: { ...video, size: undefined } as Video }, null);
+    expect(value(bare, 'Bitrate')).toBe('chosen by the player');
+  });
+
+  it('copes with missing details', () => {
     const bare = { ...video, size: undefined, mediaType: undefined, height: 0 } as Video;
-    const rows = collectStats(element({ videoWidth: 0, videoHeight: 0, duration: Number.NaN, currentSrc: '', paused: true, muted: true, volume: 0.5, readyState: 9, networkState: 9, buffered: { length: 2, start: () => 0, end: () => 0 } }), context({ video: bare, quality: '720', sourceUrl: 'not a url', speed: 1.25 }), null);
-    expect(value(rows, 'Stream')).toBe('transcoded 720p from unknown');
+    const rows = collectStats(element({ videoWidth: 0, videoHeight: 0, duration: Number.NaN, currentSrc: '', paused: true, muted: true, volume: 0.5, readyState: 9, networkState: 9, buffered: { length: 2, start: () => 0, end: () => 0 } }), context({ video: bare, sourceUrl: 'not a url', speed: 1.25 }), null);
+    expect(value(rows, 'Stream')).toBe('original file from unknown');
     expect(value(rows, 'File')).toBe('unknown');
     expect(value(rows, 'Bitrate')).toBe('unknown');
     expect(value(rows, 'Resolution')).toBe('waiting for the video');

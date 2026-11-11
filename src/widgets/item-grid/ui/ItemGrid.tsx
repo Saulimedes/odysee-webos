@@ -20,8 +20,9 @@ interface Props<T> {
   emptyHint?: string;
   emptyIcon?: ReactNode;
   getKey: (item: T) => string;
-  renderItem: (item: T, index: number, active: boolean, pick: (index: number) => void, hover: (index: number) => void) => ReactNode;
+  renderItem: (item: T, index: number, active: boolean, pick: (index: number) => void, hover: (index: number) => void, menu: (index: number) => void) => ReactNode;
   onSelect: (item: T, index: number) => void;
+  onHold?: (item: T, index: number) => void;
   onLoadMore?: () => void;
   onLeftEdge?: () => void;
   onTopEdge?: () => void;
@@ -31,7 +32,7 @@ interface Props<T> {
 
 export function ItemGrid<T>({
   stateKey, title, subtitle, items, layout, loading, loadingMore, error, emptyTitle, emptyHint, emptyIcon,
-  getKey, renderItem, onSelect, onLoadMore, onLeftEdge, onTopEdge, enabled = true, height,
+  getKey, renderItem, onSelect, onHold, onLoadMore, onLeftEdge, onTopEdge, enabled = true, height,
 }: Props<T>) {
   const nav = useNav<unknown>();
   const [stored, setIndex] = useRemembered(`${stateKey}:index`, 0);
@@ -45,14 +46,17 @@ export function ItemGrid<T>({
 
   const itemsRef = useRef(items);
   const selectRef = useRef(onSelect);
+  const holdRef = useRef(onHold);
   itemsRef.current = items;
   selectRef.current = onSelect;
+  holdRef.current = onHold;
   const pick = useCallback((at: number) => {
     setIndex(at);
     selectRef.current(itemsRef.current[at], at);
   }, [setIndex]);
 
   const hover = useCallback((at: number) => setIndex(at), [setIndex]);
+  const hold = useCallback((at: number) => holdRef.current?.(itemsRef.current[at], at), []);
 
   const active = enabled && !nav.sidebarFocused;
   useGridNav({
@@ -61,6 +65,7 @@ export function ItemGrid<T>({
     index,
     setIndex,
     onSelect: pick,
+    onHold: onHold ? hold : undefined,
     onLeftEdge: onLeftEdge ?? nav.focusSidebar,
     onTopEdge,
     onNearEnd: onLoadMore,
@@ -93,7 +98,7 @@ export function ItemGrid<T>({
             height={viewport}
             activeIndex={index}
             getKey={getKey}
-            renderItem={(item, at, active) => renderItem(item, at, active, pick, hover)}
+            renderItem={(item, at, focused) => renderItem(item, at, focused && enabled, pick, hover, hold)}
           />
           {loadingMore && <div className="itemGrid__more"><Spinner inline /></div>}
         </>

@@ -5,7 +5,7 @@ import { categoryFeed } from '@/features/browse-feeds';
 import { categoryIcon, useHomepage, useHomepageFailed, type Category } from '@/entities/category';
 import { useSession } from '@/entities/session';
 import { HOME_ROWS, useLayout, visibleItems } from '@/features/customize-layout';
-import { getFollowingVideos } from '@/features/following';
+import { getFollowingVideos, peekFollowingVideos } from '@/features/following';
 import { progressPercent, usePlaybackHistory } from '@/features/playback-history';
 import type { VideoRow } from '@/widgets/video-rows';
 
@@ -28,8 +28,7 @@ function describe(featured: Category | null, categories: Category[], loggedIn: b
 }
 
 function cached(descriptor: Descriptor): RowState | null {
-  if (!descriptor.feed) return null;
-  const hit = peekClaims(descriptor.feed(1));
+  const hit = descriptor.feed ? peekClaims(descriptor.feed(1)) : peekFollowingVideos(1, descriptor.pageSize);
   return hit ? { videos: hit.videos, status: 'ready', page: 1, hasMore: hit.videos.length >= descriptor.pageSize, stale: hit.stale } : null;
 }
 

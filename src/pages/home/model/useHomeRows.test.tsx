@@ -104,7 +104,7 @@ describe('useHomeRows request order', () => {
       const channel = body.params.channel_ids[0] as string;
       asked.push(channel);
       const ok = await new Promise<boolean>((resolve) => { waiting.set(channel, [...(waiting.get(channel) || []), resolve]); });
-      if (!ok) throw new Error('offline');
+      if (!ok) return jsonResponse({ error: { message: 'down' } });
       return jsonResponse(rpcResult({ items: Array.from({ length: body.params.page_size }, (_, index) => claim(`${channel}-${body.params.page}-${index}`)) }));
     }));
     release = () => { waiting.forEach((list) => list.forEach((resolve) => resolve(true))); waiting.clear(); };

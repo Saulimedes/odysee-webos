@@ -1,21 +1,12 @@
-import { LIGHTHOUSE_URL, getSetting } from '@/shared/config';
-import { getJson, query } from '@/shared/api';
+import { lighthouseSearch } from '@/shared/api';
 import { resolveVideos, type Video } from '@/entities/video';
 import { resolveChannels, type Channel } from '@/entities/channel';
+import { DEFAULT_FILTERS, filterParams, type SearchFilters } from '../model/filters';
 
 export const SEARCH_PAGE = 40;
 
-interface Hit { claimId: string }
-
 function lighthouse(text: string, from: number, extra: Record<string, string>): Promise<string[]> {
-  const nsfw = getSetting('nsfw') ? 'true' : 'false';
-  const params = new URLSearchParams({ s: text, size: String(SEARCH_PAGE), nsfw, ...extra });
-  if (from > 0) params.set('from', String(from));
-  const url = `${LIGHTHOUSE_URL}?${params}`;
-  return query(`search:${url}`, async () => {
-    const hits = await getJson<Hit[]>(url);
-    return Array.isArray(hits) ? hits.map((hit) => hit.claimId) : [];
-  }, { ttl: 2 * 60 * 1000 });
+  return lighthouseSearch(text, { size: String(SEARCH_PAGE), ...(from > 0 ? { from: String(from) } : {}), ...extra });
 }
 
 export interface SearchPage<T> { items: T[]; count: number }
@@ -23,8 +14,8 @@ export interface SearchPage<T> { items: T[]; count: number }
 const NONE: SearchPage<never> = { items: [], count: 0 };
 
 // Lighthouse only names the claims and a second request fetches them, skipped when the text has moved on
-export async function searchVideoPage(text: string, from: number, isCurrent: () => boolean = () => true): Promise<SearchPage<Video>> {
-  const ids = await lighthouse(text, from, { claimType: 'file', mediaType: 'video' });
+export async function searchVideoPage(text: string, from: number, isCurrent: () => boolean = () => true, filters: SearchFilters = DEFAULT_FILTERS): Promise<SearchPage<Video>> {
+  const ids = await lighthouse(text, from, { claimType: 'file', mediaType: 'video', ...filterParams(filters) });
   if (!isCurrent()) return NONE;
   return { items: await resolveVideos(ids), count: ids.length };
 }

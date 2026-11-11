@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { claim, flush, mockFetch, rpcResult, video } from '../../tests/helpers';
-import { renderWithNav, setViewport } from '../../tests/render';
+import { renderWithNav, setViewport, tapOk } from '../../tests/render';
 import { invalidate } from '@/shared/api';
 import { forgetRemembered } from '@/shared/lib/remember';
 import { refreshHomepage } from '@/entities/category';
@@ -17,7 +17,7 @@ import { FollowingPage } from './following';
 import { PlaylistsPage } from './playlists';
 import type { Video } from '@/entities/video';
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 
 const content = {
   status: 'success',
@@ -41,7 +41,7 @@ function api({ fail, empty, homepage = content }: Options = {}) {
     }
     if (body.method === 'claim_list') return rpcResult({ items: [{ claim_id: 'pub1', name: 'pl', value: { title: 'Public list', claims: ['pub-a', 'pub-b'] } }, { claim_id: 'c9', name: '@me' }] });
     if (body.method === 'claim_search') {
-      if (fail) throw new Error('offline');
+      if (fail) return { error: { message: 'down' } };
       const params = body.params;
       if (params.claim_type && params.claim_type[0] === 'channel') return rpcResult({ items: [{ claim_id: 'c1', name: '@one', value: { title: 'Channel One' } }] });
       if (empty) return rpcResult({ items: [] });
@@ -124,12 +124,12 @@ describe('Home', () => {
     const { nav } = renderWithNav(<Home />);
     await screen.findByText('f1 video 1-0');
     press(39);
-    press(13);
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1-1-1' }));
+    tapOk();
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1-1-1' }), expect.any(Array));
     press(40);
     await screen.findByText('g1 video 1-0');
-    press(13);
-    expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'g1-1-0' }));
+    tapOk();
+    expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'g1-1-0' }), expect.any(Array));
   });
 
   it('shows cached rows immediately on the next launch', async () => {
@@ -180,7 +180,7 @@ describe('FeedPage', () => {
     expect(screen.getByText('Discover')).toBeInTheDocument();
     expect(screen.getByText('Trending videos on Odysee')).toBeInTheDocument();
     await screen.findByText('all video 1-0');
-    press(13);
+    tapOk();
     expect(nav.play).toHaveBeenCalled();
   });
 
@@ -205,13 +205,6 @@ describe('FeedPage', () => {
     await act(async () => { await refreshHomepage(true); });
     renderWithNav(<FeedPage source={{ kind: 'category', id: 'NOPE' }} />);
     expect(screen.getByText('Content not available')).toBeInTheDocument();
-  });
-
-  it('shows the videos of a channel', async () => {
-    api();
-    renderWithNav(<FeedPage source={{ kind: 'channel', id: 'abc', name: 'My channel' }} />);
-    expect(screen.getByText('My channel')).toBeInTheDocument();
-    expect(await screen.findByText('abc video 1-0')).toBeInTheDocument();
   });
 });
 

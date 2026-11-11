@@ -1,5 +1,6 @@
 export { readJson, writeJson, removeKey } from './storage';
-export { useKeys, PRIORITY } from './keys';
+export { useKeys, isEnterHeld, PRIORITY } from './keys';
+export { useOkPress } from './okPress';
 export { isTextField } from './textField';
 export { formatDuration, formatRelativeTime } from './format';
 export { useRemembered } from './remember';

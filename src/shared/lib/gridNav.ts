@@ -1,5 +1,6 @@
 import { KEY } from '@/shared/config';
 import { useKeys, PRIORITY } from './keys';
+import { useOkPress } from './okPress';
 
 interface GridNav {
   count: number;
@@ -7,6 +8,7 @@ interface GridNav {
   index: number;
   setIndex: (next: number) => void;
   onSelect: (index: number) => void;
+  onHold?: (index: number) => void;
   onLeftEdge?: () => void;
   onTopEdge?: () => void;
   onNearEnd?: () => void;
@@ -14,7 +16,8 @@ interface GridNav {
   priority?: number;
 }
 
-export function useGridNav({ count, columns, index, setIndex, onSelect, onLeftEdge, onTopEdge, onNearEnd, enabled = true, priority = PRIORITY.content }: GridNav) {
+export function useGridNav({ count, columns, index, setIndex, onSelect, onHold, onLeftEdge, onTopEdge, onNearEnd, enabled = true, priority = PRIORITY.content }: GridNav) {
+  const ok = useOkPress();
   useKeys((event) => {
     const row = Math.floor(index / columns);
     const col = index % columns;
@@ -38,10 +41,16 @@ export function useGridNav({ count, columns, index, setIndex, onSelect, onLeftEd
         if (col < columns - 1 && index < count - 1) setIndex(index + 1);
         return true;
       case KEY.ENTER:
-        if (index < count) onSelect(index);
+        if (index >= count) return true;
+        if (onHold) ok.down(event, { press: () => onSelect(index), hold: () => onHold(index) });
+        else if (!event.repeat) onSelect(index);
         return true;
       default:
         return false;
     }
-  }, { enabled: enabled && count > 0, priority });
+  }, {
+    enabled: enabled && count > 0,
+    priority,
+    onKeyUp: onHold ? (event) => { if (event.keyCode !== KEY.ENTER) return false; ok.up(); return true; } : undefined,
+  });
 }

@@ -11,7 +11,7 @@ vi.mock('@/shared/lib', async (importOriginal) => {
   return { ...actual, formatRelativeTime: (...args: Parameters<typeof actual.formatRelativeTime>) => { renders.cards++; return actual.formatRelativeTime(...args); } };
 });
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 const videos = (count: number, prefix: string) => Array.from({ length: count }, (_, index) => video(`${prefix}${index}`) as Video);
 
 const rows = (): VideoRow[] => [
@@ -69,7 +69,7 @@ describe('VideoRows rendering', () => {
   it('plays and focuses a card that is clicked in another row', () => {
     const { nav } = renderWithNav(<VideoRows stateKey="rr5" rows={rows()} />);
     fireEvent.click(screen.getByText('Video b2'));
-    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'b2' }));
+    expect(nav.play).toHaveBeenCalledWith(expect.objectContaining({ id: 'b2' }), expect.any(Array));
     expect(document.querySelector('.videoRow--active .videoRow__title')?.textContent).toBe('Second');
     expect(document.querySelector('.card--active')).toHaveTextContent('Video b2');
   });

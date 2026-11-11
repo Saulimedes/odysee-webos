@@ -15,8 +15,31 @@ import { Player } from './ui/Player';
 import { Timeline } from './ui/Timeline';
 import { useSeek } from './model/useSeek';
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const hlsJs = vi.hoisted(() => {
+  type Problem = { fatal: boolean; details: string };
+  const state = { supported: true, beforeUse: null as (() => void) | null };
+  const created: FakeHls[] = [];
+  class FakeHls {
+    static Events = { ERROR: 'hlsError' };
+    static isSupported = () => { state.beforeUse?.(); return state.supported; };
+    url = '';
+    media: HTMLVideoElement | null = null;
+    destroyed = false;
+    private handler: ((event: string, data: Problem) => void) | null = null;
+    constructor() { created.push(this); }
+    on(_name: string, handler: (event: string, data: Problem) => void) { this.handler = handler; }
+    loadSource(url: string) { this.url = url; }
+    attachMedia(element: HTMLVideoElement) { this.media = element; }
+    destroy() { this.destroyed = true; }
+    fire(data: Problem) { this.handler?.('hlsError', data); }
+  }
+  return { state, created, FakeHls };
+});
+vi.mock('hls.js', () => ({ default: hlsJs.FakeHls }));
+
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 const sample = video('vid1') as Video;
+const MASTER_TEXT = '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000,RESOLUTION=1280x720\nv0.m3u8\n';
 
 function media() {
   return document.querySelector('video') as HTMLVideoElement;
@@ -47,11 +70,13 @@ const setup = (props: Partial<React.ComponentProps<typeof Player>> = {}) => {
 };
 
 beforeEach(() => {
+  hlsJs.created.length = 0;
+  hlsJs.state.supported = true;
+  hlsJs.state.beforeUse = null;
   setViewport();
   invalidate();
   setSetting('autoplay', true);
   setSetting('resume', true);
-  setSetting('quality', 'auto');
   setSetting('aspectRatio', 'auto');
   setSetting('playbackSpeed', 1);
   setSetting('statsForNerds', false);
@@ -71,12 +96,6 @@ describe('Player playback', () => {
     expect(document.querySelector('.player__buffering')).not.toBeNull();
     fireEvent(media(), new Event('playing'));
     expect(document.querySelector('.player__buffering')).toBeNull();
-  });
-
-  it('uses the selected quality', () => {
-    setSetting('quality', '720');
-    setup();
-    expect(media().src).toContain('/api/v4/streams/tc/name-vid1/vid1/abcdef?quality=720p');
   });
 
   it('resumes from the saved position once metadata is known', () => {
@@ -113,12 +132,12 @@ describe('Player playback', () => {
     expect(media().currentTime).toBe(200);
   });
 
-  it('prefers an explicit start position and skips resuming near the end', () => {
+  it('skips resuming when the saved position is close to the end', () => {
     savePlaybackPosition(sample, 120, 600);
-    setup({ startAt: 30 });
-    setMedia(media(), { currentTime: 0, duration: 600 });
+    setup();
+    setMedia(media(), { currentTime: 0, duration: 122 });
     fireEvent(media(), new Event('loadedmetadata'));
-    expect(media().currentTime).toBe(30);
+    expect(media().currentTime).toBe(0);
   });
 
   it('does not resume when the setting is off', () => {
@@ -163,13 +182,122 @@ describe('Player playback', () => {
     expect(onPlayNext).not.toHaveBeenCalled();
   });
 
-  it('plays the next video of the channel when it ends', async () => {
-    const { onPlayNext } = setup();
-    await act(async () => { for (let index = 0; index < 12; index++) await flush(); });
-    vi.useFakeTimers();
-    fireEvent(media(), new Event('ended'));
-    act(() => { vi.advanceTimersByTime(600); });
-    expect(onPlayNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'next1' }));
+  const settle = async () => { await act(async () => { for (let index = 0; index < 12; index++) await flush(); }); };
+  const end = () => fireEvent(media(), new Event('ended'));
+  const seconds = (count: number) => { for (let index = 0; index < count; index++) act(() => { vi.advanceTimersByTime(1000); }); };
+
+  describe('autoplay', () => {
+    it('counts down before it plays the next video of the list the video came from', async () => {
+      const queue = [sample, video('q2') as Video, video('q3') as Video];
+      const { onPlayNext, onClose } = setup({ queue });
+      await settle();
+      vi.useFakeTimers();
+      end();
+      expect(screen.getByText('Up next')).toBeInTheDocument();
+      expect(screen.getByText('Video q2')).toBeInTheDocument();
+      expect(screen.getByText('Playing in 5 s')).toBeInTheDocument();
+      seconds(3);
+      expect(screen.getByText('Playing in 2 s')).toBeInTheDocument();
+      expect(onPlayNext).not.toHaveBeenCalled();
+      seconds(2);
+      expect(onPlayNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'q2' }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.queryByText('Up next')).toBeNull();
+    });
+
+    it('plays the next video at once on OK and lets Back cancel the countdown', async () => {
+      const queue = [sample, video('q2') as Video];
+      const { onPlayNext, onClose } = setup({ queue });
+      await settle();
+      vi.useFakeTimers();
+      end();
+      press(37);
+      expect(onPlayNext).not.toHaveBeenCalled();
+      press(13);
+      expect(onPlayNext).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Up next')).toBeNull();
+      end();
+      press(461);
+      expect(screen.queryByText('Up next')).toBeNull();
+      seconds(8);
+      expect(onPlayNext).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+      end();
+      press(413);
+      expect(screen.queryByText('Up next')).toBeNull();
+    });
+
+    it('goes on with a related video when the list is over, and skips what was already watched', async () => {
+      collections.set({ watchLater: [], favorites: [], history: [video('r1') as Video] });
+      mockApi((url, init) => {
+        if (url.includes('lighthouse')) return [{ claimId: 'vid1' }, { claimId: 'r1' }, { claimId: 'r2' }];
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        if (body.method === 'claim_search') return rpcResult({ items: body.params.claim_ids.map((id: string) => claim(id)) });
+        return undefined;
+      });
+      const { onPlayNext } = setup({ queue: [sample] });
+      await settle();
+      vi.useFakeTimers();
+      end();
+      seconds(6);
+      expect(onPlayNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }));
+    });
+
+    it('falls back to the newest video of the channel when there are no related videos', async () => {
+      mockApi((url) => (url.includes('lighthouse') ? [] : undefined));
+      const { onPlayNext } = setup();
+      await settle();
+      vi.useFakeTimers();
+      end();
+      seconds(6);
+      expect(onPlayNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'next1' }));
+    });
+
+    it('closes after the video when nothing follows', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockApi((url) => (url.includes('lighthouse') ? [] : undefined));
+      const { onPlayNext, onClose } = setup({ video: { ...sample, channelId: undefined } });
+      await settle();
+      vi.useFakeTimers();
+      end();
+      expect(screen.queryByText('Up next')).toBeNull();
+      act(() => { vi.advanceTimersByTime(600); });
+      expect(onClose).toHaveBeenCalled();
+      expect(onPlayNext).not.toHaveBeenCalled();
+    });
+
+    it('offers the next video as a button that plays it at once', async () => {
+      const queue = [sample, video('q2') as Video];
+      const { onPlayNext } = setup({ queue });
+      await settle();
+      const next = document.querySelector('.player__group .tabler-icon-player-track-next')?.closest('.pbtn') as HTMLElement;
+      expect(next).not.toBeNull();
+      press(39); press(39);
+      expect(next.className).toContain('pbtn--active');
+      press(13);
+      expect(onPlayNext).toHaveBeenCalledWith(expect.objectContaining({ id: 'q2' }));
+      fireEvent.click(next);
+      expect(onPlayNext).toHaveBeenCalledTimes(2);
+    });
+
+    it('has no next button while nothing follows, and the remote skips its place', async () => {
+      mockApi((url) => (url.includes('lighthouse') ? [] : rpcResult({ items: [claim('vid1')] })));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setup({ video: { ...sample, channelId: undefined } });
+      await settle();
+      expect(document.querySelector('.tabler-icon-player-track-next')).toBeNull();
+    });
+
+    it('reports the video once when it really starts playing', () => {
+      const onStarted = vi.fn();
+      setup({ onStarted });
+      fireEvent(media(), new Event('canplay'));
+      expect(onStarted).not.toHaveBeenCalled();
+      fireEvent(media(), new Event('playing'));
+      fireEvent(media(), new Event('playing'));
+      expect(onStarted).toHaveBeenCalledTimes(1);
+      expect(onStarted).toHaveBeenCalledWith(expect.objectContaining({ id: 'vid1' }));
+    });
   });
 
   const fail = (message: string | null = 'bad') => {
@@ -177,29 +305,9 @@ describe('Player playback', () => {
     fireEvent(media(), new Event('error'));
   };
 
-  it('tries the next source when one fails before it ever played', () => {
+  it('shows the error when the stream cannot be loaded and loads it again on OK', () => {
     setup();
     expect(media().src).toBe('https://odysee.com/$/download/name-vid1/vid1');
-    fail();
-    expect(document.querySelector('.player__error')).toBeNull();
-    expect(media().src).toBe('https://cdn.lbryplayer.xyz/api/v3/streams/free/name-vid1/vid1/abcdef');
-  });
-
-  it('tries the transcoded stream first when a quality is chosen, then the original', () => {
-    setSetting('quality', '720');
-    setup();
-    expect(media().src).toContain('/api/v4/streams/tc/name-vid1/vid1/abcdef?quality=720p');
-    fail();
-    expect(media().src).toBe('https://odysee.com/$/download/name-vid1/vid1');
-    fail();
-    expect(media().src).toContain('/api/v3/streams/free/');
-    fail();
-    expect(screen.getByText('Video playback error: bad')).toBeInTheDocument();
-  });
-
-  it('shows the error when every source failed and starts again from the first one on OK', () => {
-    setup();
-    fail();
     fail();
     expect(screen.getByText('Video playback error: bad')).toBeInTheDocument();
     const loads = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
@@ -209,13 +317,335 @@ describe('Player playback', () => {
     expect(media().src).toBe('https://odysee.com/$/download/name-vid1/vid1');
   });
 
+  const refuse = () => {
+    Object.defineProperty(media(), 'error', { value: { code: 4, message: 'MEDIA_ELEMENT_ERROR: Format error' }, configurable: true });
+    fireEvent(media(), new Event('error'));
+  };
+  const loadCalls = () => vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
+  const DELAYS = [3, 5, 8, 12, 15, 20, 30, 30, 30, 30];
+
+  it('tries a refused stream again by itself, slowly, behind the loading animation instead of showing an error or a message', () => {
+    vi.useFakeTimers();
+    setup();
+    refuse();
+    expect(document.querySelector('.player__error')).toBeNull();
+    expect(document.querySelector('.player__buffering')).not.toBeNull();
+    expect(document.querySelector('.player__status')).toBeNull();
+    const loads = loadCalls();
+    act(() => { vi.advanceTimersByTime(2900); });
+    expect(loadCalls()).toBe(loads);
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(loadCalls()).toBeGreaterThan(loads);
+    expect(media().src).toBe('https://odysee.com/$/download/name-vid1/vid1');
+    expect(document.querySelector('.player__buffering')).not.toBeNull();
+    fireEvent(media(), new Event('playing'));
+    expect(document.querySelector('.player__buffering')).toBeNull();
+  });
+
+  it('waits a little longer each time, and names both possible causes once it has given up', () => {
+    vi.useFakeTimers();
+    setup({ video: { ...sample, id: 'patient' } as Video });
+    for (const seconds of DELAYS) {
+      refuse();
+      expect(document.querySelector('.player__error')).toBeNull();
+      const before = loadCalls();
+      act(() => { vi.advanceTimersByTime(seconds * 1000 - 100); });
+      expect(loadCalls()).toBe(before);
+      act(() => { vi.advanceTimersByTime(200); });
+      expect(loadCalls()).toBeGreaterThan(before);
+    }
+    refuse();
+    expect(screen.getByText('The video could not be loaded. The server may be busy, or this TV cannot play this file. Try again, or pick another video.')).toBeInTheDocument();
+    expect(document.querySelector('.player__buffering')).toBeNull();
+    const loads = loadCalls();
+    act(() => { vi.advanceTimersByTime(60000); });
+    expect(loadCalls()).toBe(loads);
+  });
+
+  it('lets OK ask again after a short pause, and starts the waiting over', () => {
+    vi.useFakeTimers();
+    setup({ video: { ...sample, id: 'asking' } as Video });
+    for (const seconds of DELAYS) { refuse(); act(() => { vi.advanceTimersByTime(seconds * 1000 + 100); }); }
+    refuse();
+    expect(document.querySelector('.player__error')).not.toBeNull();
+    const loads = loadCalls();
+    press(13);
+    expect(document.querySelector('.player__toast')?.textContent).toMatch(/^Please wait [1-5] s before trying again$/);
+    expect(loadCalls()).toBe(loads);
+    act(() => { vi.advanceTimersByTime(5100); });
+    press(13);
+    expect(loadCalls()).toBeGreaterThan(loads);
+    expect(document.querySelector('.player__error')).toBeNull();
+    refuse();
+    expect(document.querySelector('.player__error')).toBeNull();
+    expect(document.querySelector('.player__buffering')).not.toBeNull();
+  });
+
+  it('does not repeat the whole waiting for a video that already used it up in this session', () => {
+    vi.useFakeTimers();
+    const first = setup({ video: { ...sample, id: 'stubborn' } as Video });
+    for (const seconds of DELAYS) { refuse(); act(() => { vi.advanceTimersByTime(seconds * 1000 + 100); }); }
+    refuse();
+    expect(screen.getByText('The video could not be loaded. The server may be busy, or this TV cannot play this file. Try again, or pick another video.')).toBeInTheDocument();
+    first.unmount();
+    setup({ video: { ...sample, id: 'stubborn' } as Video });
+    refuse();
+    expect(document.querySelector('.player__error')).toBeNull();
+    expect(document.querySelector('.player__buffering')).not.toBeNull();
+    act(() => { vi.advanceTimersByTime(30100); });
+    refuse();
+    expect(screen.getByText('The video could not be loaded. The server may be busy, or this TV cannot play this file. Try again, or pick another video.')).toBeInTheDocument();
+  });
+
+  it('ignores OK while it waits to try again, and closes with Back', () => {
+    vi.useFakeTimers();
+    const { onClose, unmount } = setup();
+    refuse();
+    const plays = vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length;
+    const loads = loadCalls();
+    press(13);
+    expect(vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length).toBe(plays);
+    expect(loadCalls()).toBe(loads);
+    press(461);
+    press(461);
+    expect(onClose).toHaveBeenCalled();
+    unmount();
+    const closed = loadCalls();
+    act(() => { vi.advanceTimersByTime(60000); });
+    expect(loadCalls()).toBe(closed);
+  });
+
+  it('shows what the player says when a file cannot be played at all, instead of saying the server is busy', () => {
+    setup();
+    Object.defineProperty(media(), 'error', { value: { code: 4, message: 'DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed' }, configurable: true });
+    fireEvent(media(), new Event('error'));
+    expect(screen.getByText('Video playback error: DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed')).toBeInTheDocument();
+    const loads = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
+    press(13);
+    expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBeGreaterThan(loads);
+  });
+
+  it('does not say busy for a stream that played before and broke later', () => {
+    vi.useFakeTimers();
+    setup();
+    setMedia(media(), { currentTime: 30, duration: 600, paused: false });
+    fireEvent(media(), new Event('playing'));
+    Object.defineProperty(media(), 'error', { value: { code: 4, message: 'gone' }, configurable: true });
+    fireEvent(media(), new Event('error'));
+    expect(document.querySelector('.player__error')).toBeNull();
+  });
+
+  describe('transcoded stream', () => {
+    const START = (id: string) => `https://player.odycdn.com/v6/streams/${id}/sd1/v0.m3u8`;
+    const FILE = (id: string) => `https://odysee.com/$/download/name-${id}/${id}`;
+    const playlist = (status = 200, type = 'application/x-mpegurl') => new Response(status === 200 ? MASTER_TEXT : null, { status, headers: { 'Content-Type': type } });
+    const withHls = (id: string) => ({ ...sample, id, claimName: `name-${id}`, sdHash: 'sd1' }) as Video;
+    const answer = (handler: () => Response) => mockApi((url) => (url.includes('player.odycdn.com') ? handler() : undefined));
+    const lookups = (spy: ReturnType<typeof mockApi>) => spy.mock.calls.filter(([url]) => String(url).includes('player.odycdn.com'));
+    const nativeHls = () => vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type) => (/mpegurl/i.test(type) ? 'maybe' : ''));
+    const settle = () => act(async () => { await vi.advanceTimersByTimeAsync(20); });
+    const later = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+    it('starts the transcoded stream on its best rendition when the TV can play HLS and the server has one', async () => {
+      nativeHls();
+      const spy = answer(() => playlist());
+      setup({ video: withHls('hls1') });
+      await waitFor(() => expect(media().src).toBe(START('hls1')));
+      expect(lookups(spy)).toHaveLength(1);
+      expect(lookups(spy)[0][0]).toBe('https://player.odycdn.com/v6/streams/hls1/sd1/master.m3u8');
+      fireEvent(media(), new Event('playing'));
+      expect(document.querySelector('.player__error')).toBeNull();
+    });
+
+    it('plays the file when the server has no transcoded copy', async () => {
+      nativeHls();
+      answer(() => playlist(404, 'text/plain'));
+      setup({ video: withHls('hls2') });
+      await waitFor(() => expect(media().src).toBe(FILE('hls2')));
+    });
+
+    it('does not look for a transcoded stream when the browser cannot play HLS', () => {
+      const spy = answer(() => playlist());
+      setup({ video: withHls('hls3') });
+      expect(media().src).toBe(FILE('hls3'));
+      expect(lookups(spy)).toHaveLength(0);
+    });
+
+    it('plays the file at once when the server refuses the lookup, since the origin still serves the file', async () => {
+      nativeHls();
+      const spy = answer(() => playlist(429, 'text/plain'));
+      setup({ video: withHls('hls4') });
+      await waitFor(() => expect(media().src).toBe(FILE('hls4')));
+      expect(lookups(spy)).toHaveLength(1);
+      expect(document.querySelector('.player__error')).toBeNull();
+    });
+
+    it('asks for the file at once when the transcoded stream does not start', async () => {
+      vi.useFakeTimers();
+      nativeHls();
+      const spy = answer(() => playlist());
+      setup({ video: withHls('hls6') });
+      await settle();
+      expect(media().src).toBe(START('hls6'));
+      refuse();
+      await settle();
+      expect(media().src).toBe(FILE('hls6'));
+      expect(document.querySelector('.player__error')).toBeNull();
+      expect(lookups(spy)).toHaveLength(1);
+    });
+
+    it('does not try the transcoded stream again in this session for a video where it failed, except when OK asks again', async () => {
+      vi.useFakeTimers();
+      nativeHls();
+      const spy = answer(() => playlist());
+      const first = setup({ video: withHls('hls7') });
+      await settle();
+      refuse();
+      await settle();
+      expect(media().src).toBe(FILE('hls7'));
+      expect(lookups(spy)).toHaveLength(1);
+      first.unmount();
+      setup({ video: withHls('hls7') });
+      expect(media().src).toBe(FILE('hls7'));
+      expect(lookups(spy)).toHaveLength(1);
+      fail();
+      expect(document.querySelector('.player__error')).not.toBeNull();
+      press(13);
+      await settle();
+      expect(lookups(spy)).toHaveLength(2);
+      expect(media().src).toBe(START('hls7'));
+    });
+
+    it('shows the error right away when the browser refuses to start the video, which is not a problem of the stream', async () => {
+      nativeHls();
+      const spy = answer(() => playlist());
+      vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(Object.assign(new Error('needs a click'), { name: 'NotAllowedError' }));
+      setup({ video: withHls('hls9') });
+      await waitFor(() => expect(screen.getByText('Failed to play video: needs a click')).toBeInTheDocument());
+      expect(lookups(spy)).toHaveLength(1);
+    });
+
+    it('reloads a transcoded stream that breaks after it played through the file, which the origin serves more reliably', async () => {
+      vi.useFakeTimers();
+      nativeHls();
+      const spy = answer(() => playlist());
+      setup({ video: withHls('hls8') });
+      await settle();
+      expect(media().src).toBe(START('hls8'));
+      setMedia(media(), { currentTime: 30, duration: 600, paused: false });
+      fireEvent(media(), new Event('playing'));
+      Object.defineProperty(media(), 'error', { value: { code: 2, message: 'network' }, configurable: true });
+      fireEvent(media(), new Event('error'));
+      expect(document.querySelector('.player__error')).toBeNull();
+      await later(2100);
+      expect(media().src).toBe(FILE('hls8'));
+      expect(lookups(spy)).toHaveLength(1);
+    });
+  });
+
+  describe('hls.js in the dev server', () => {
+    const MASTER = (id: string) => `https://player.odycdn.com/v6/streams/${id}/sd1/master.m3u8`;
+    const FILE = (id: string) => `https://odysee.com/$/download/name-${id}/${id}`;
+    const withHls = (id: string) => ({ ...sample, id, claimName: `name-${id}`, sdHash: 'sd1' }) as Video;
+    const answer = () => mockApi((url) => (url.includes('player.odycdn.com') ? new Response(MASTER_TEXT, { headers: { 'Content-Type': 'application/x-mpegurl' } }) : undefined));
+
+    it('plays the transcoded stream through hls.js when the browser has no HLS of its own', async () => {
+      vi.stubGlobal('DEV_SERVER', true);
+      answer();
+      setup({ video: withHls('js1') });
+      await waitFor(() => expect(hlsJs.created).toHaveLength(1));
+      expect(hlsJs.created[0].url).toBe(MASTER('js1'));
+      expect(hlsJs.created[0].media).toBe(media());
+      expect(media().hasAttribute('src')).toBe(false);
+      expect(vi.mocked(HTMLMediaElement.prototype.play)).toHaveBeenCalled();
+    });
+
+    it('asks for the file at once when hls.js reports a fatal problem before the video starts', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal('DEV_SERVER', true);
+      answer();
+      setup({ video: withHls('js2') });
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(hlsJs.created).toHaveLength(1);
+      act(() => hlsJs.created[0].fire({ fatal: true, details: 'manifestLoadError' }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(hlsJs.created[0].destroyed).toBe(true);
+      expect(hlsJs.created).toHaveLength(1);
+      expect(media().src).toBe(FILE('js2'));
+    });
+
+    it('goes on after a problem that hls.js recovers from by itself', async () => {
+      vi.stubGlobal('DEV_SERVER', true);
+      answer();
+      setup({ video: withHls('js3') });
+      await waitFor(() => expect(hlsJs.created).toHaveLength(1));
+      act(() => hlsJs.created[0].fire({ fatal: false, details: 'fragLoadError' }));
+      expect(media().hasAttribute('src')).toBe(false);
+      expect(hlsJs.created[0].destroyed).toBe(false);
+    });
+
+    it('asks for the file when this browser cannot run hls.js', async () => {
+      vi.useFakeTimers();
+      vi.stubGlobal('DEV_SERVER', true);
+      hlsJs.state.supported = false;
+      answer();
+      setup({ video: withHls('js4') });
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(media().src).toBe(FILE('js4'));
+      expect(hlsJs.created).toHaveLength(0);
+    });
+
+    it('lets go of hls.js when the player closes', async () => {
+      vi.stubGlobal('DEV_SERVER', true);
+      answer();
+      const open = setup({ video: withHls('js5') });
+      await waitFor(() => expect(hlsJs.created).toHaveLength(1));
+      await act(async () => { await flush(); });
+      open.unmount();
+      expect(hlsJs.created[0].destroyed).toBe(true);
+    });
+
+    it('lets go of hls.js when the player closes before it finished starting up', async () => {
+      vi.stubGlobal('DEV_SERVER', true);
+      answer();
+      const open = setup({ video: withHls('js6') });
+      hlsJs.state.beforeUse = () => open.unmount();
+      await waitFor(() => expect(hlsJs.created).toHaveLength(1));
+      await act(async () => { await flush(); });
+      expect(hlsJs.created[0].destroyed).toBe(true);
+    });
+  });
+
+  it('says that the device cannot play a file when the engine names no reason for a decode problem', () => {
+    setup();
+    Object.defineProperty(media(), 'error', { value: { code: 3, message: '' }, configurable: true });
+    fireEvent(media(), new Event('error'));
+    expect(screen.getByText('This device cannot play this video file.')).toBeInTheDocument();
+  });
+
+  it('keeps the old text for a nameless problem that says nothing about the file', () => {
+    setup();
+    Object.defineProperty(media(), 'error', { value: { code: 2, message: '' }, configurable: true });
+    fireEvent(media(), new Event('error'));
+    expect(screen.getByText('Video playback error: Unknown error')).toBeInTheDocument();
+  });
+
+  it('treats a nameless refusal like a busy server, since other browsers give no message for a 429', () => {
+    vi.useFakeTimers();
+    setup();
+    Object.defineProperty(media(), 'error', { value: { code: 4, message: '' }, configurable: true });
+    fireEvent(media(), new Event('error'));
+    expect(document.querySelector('.player__buffering')).not.toBeNull();
+    expect(document.querySelector('.player__error')).toBeNull();
+  });
+
   it('counts a failure only once when play() and the error event report it together', async () => {
     vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new Error('no source'));
     setup();
     fail();
     await act(async () => { await flush(); });
-    expect(media().src).toBe('https://cdn.lbryplayer.xyz/api/v3/streams/free/name-vid1/vid1/abcdef');
-    expect(document.querySelector('.player__error')).toBeNull();
+    expect(screen.getAllByText(/Video playback error|Failed to play video/)).toHaveLength(1);
+    expect(media().src).toBe('https://odysee.com/$/download/name-vid1/vid1');
   });
 
   it('shows an error when playback cannot start on any source', async () => {
@@ -237,7 +667,6 @@ describe('Player playback', () => {
   it('describes unknown playback errors', () => {
     setup();
     fail(null);
-    fail(null);
     expect(screen.getByText('Video playback error: Unknown error')).toBeInTheDocument();
   });
 
@@ -250,7 +679,9 @@ describe('Player playback', () => {
       const loads = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
       fail();
       expect(document.querySelector('.player__error')).toBeNull();
-      act(() => { vi.advanceTimersByTime(900); });
+      act(() => { vi.advanceTimersByTime(1900); });
+      expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBe(loads);
+      act(() => { vi.advanceTimersByTime(200); });
       expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBeGreaterThan(loads);
       expect(media().src).toBe('https://odysee.com/$/download/name-vid1/vid1');
       setMedia(media(), { currentTime: 0, duration: 3600 });
@@ -269,13 +700,13 @@ describe('Player playback', () => {
       fireEvent(media(), new Event('playing'));
       for (let round = 0; round < 3; round++) {
         fail();
-        act(() => { vi.advanceTimersByTime(900); });
+        act(() => { vi.advanceTimersByTime(2100); });
         fireEvent(media(), new Event('playing'));
       }
       expect(document.querySelector('.player__error')).toBeNull();
       for (let round = 0; round < 3; round++) {
         fail();
-        act(() => { vi.advanceTimersByTime(900); });
+        act(() => { vi.advanceTimersByTime(5100); });
       }
       fail();
       expect(screen.getByText('Video playback error: bad')).toBeInTheDocument();
@@ -346,7 +777,7 @@ describe('Player playback', () => {
         playing();
         const loads = calls('load');
         fail();
-        act(() => { vi.advanceTimersByTime(900); });
+        act(() => { vi.advanceTimersByTime(2100); });
         expect(calls('load')).toBeGreaterThan(loads);
       } finally {
         vi.useRealTimers();
@@ -402,6 +833,17 @@ describe('Player buffering indicator', () => {
 });
 
 describe('Player remote control', () => {
+  it('does not toggle playback again for the repeats of a held OK', () => {
+    setup();
+    const plays = vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length;
+    setMedia(media(), { paused: true });
+    fireEvent.keyDown(window, { keyCode: 13 });
+    fireEvent.keyDown(window, { keyCode: 13, repeat: true });
+    fireEvent.keyDown(window, { keyCode: 13, repeat: true });
+    expect(vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length).toBe(plays + 1);
+  });
+
+
   it('hides the controls first and closes on the second back press', () => {
     const { onClose } = setup();
     expect(document.querySelector('.player__controls--visible')).not.toBeNull();
@@ -666,7 +1108,7 @@ function setSize(element: HTMLVideoElement, width: number, height: number) {
   fireEvent(element, new Event('loadedmetadata'));
 }
 
-const openMenu = () => { press(39); press(39); press(39); press(39); press(13); };
+const openMenu = () => { fireEvent.click(document.querySelector('.player__group--right .pbtn:last-child') as HTMLElement); };
 const menuEntries = () => Array.from(document.querySelectorAll('.picker .pickerItem')).map((item) => item.textContent);
 
 describe('Player settings menu', () => {
@@ -678,14 +1120,13 @@ describe('Player settings menu', () => {
     expect(document.querySelector('.pbtn--pill')).toBeNull();
   });
 
-  it('lists aspect ratio, speed and quality with their current values', () => {
+  it('lists aspect ratio and speed with their current values', () => {
     setSetting('aspectRatio', 'zoom');
     setSetting('playbackSpeed', 1.5);
-    setSetting('quality', '720');
     setup();
     openMenu();
     expect(screen.getByText('Settings', { selector: 'h2' })).toBeInTheDocument();
-    expect(menuEntries()).toEqual(['Aspect RatioZoom', 'Playback Speed1.5\u00d7', 'Video Quality720p']);
+    expect(menuEntries()).toEqual(['Aspect RatioZoom', 'Playback Speed1.5\u00d7']);
   });
 
   it('starts with the defaults from Settings', () => {
@@ -760,33 +1201,95 @@ describe('Player settings menu', () => {
     expect(document.querySelector('.pickerItem--active')?.textContent).toContain('Playback Speed');
   });
 
-  it('switches the quality and continues at the same position', () => {
+  it('opens as a popover next to the picture, and the controls stay while it is open', () => {
+    vi.useFakeTimers();
     setup();
-    setMedia(media(), { currentTime: 100, duration: 600 });
+    fireEvent(media(), new Event('play'));
     openMenu();
-    press(40); press(40);
-    press(13);
-    expect(screen.getByText('Video Quality', { selector: 'h2' })).toBeInTheDocument();
-    const loads = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
-    press(40); press(40); press(40); press(40);
-    press(13);
-    expect(media().src).toContain('quality=720p');
-    expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBeGreaterThan(loads);
-    expect(document.querySelector('.player__toast')?.textContent).toBe('Quality: 720p');
-    setMedia(media(), { currentTime: 0, duration: 600 });
-    fireEvent(media(), new Event('loadedmetadata'));
-    expect(media().currentTime).toBe(100);
+    expect(document.querySelector('.picker')).toHaveClass('picker--popover');
+    act(() => { vi.advanceTimersByTime(5000); });
+    expect(document.querySelector('.player__controls--visible')).not.toBeNull();
+    press(461);
+    expect(document.querySelector('.picker')).toBeNull();
+    expect(document.querySelector('.player__controls--visible')).not.toBeNull();
+    act(() => { vi.advanceTimersByTime(4100); });
+    expect(document.querySelector('.player__controls--visible')).toBeNull();
   });
 
-  it('keeps the stream when the same quality is chosen again', () => {
+  it('shows the aspect ratio and the speed while they are picked, before OK, and puts them back on Back', () => {
     setup();
     openMenu();
-    press(40); press(40);
     press(13);
-    const loads = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
-    press(13);
-    expect(vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length).toBe(loads);
+    press(40);
+    expect(media().style.objectFit).toBe('cover');
     expect(document.querySelector('.player__toast')).toBeNull();
+    press(461);
+    expect(media().style.objectFit).toBe('contain');
+    expect(menuEntries()[0]).toBe('Aspect RatioAuto');
+    press(40);
+    press(13);
+    press(40);
+    expect(media().playbackRate).toBe(1.25);
+    press(40);
+    expect(media().playbackRate).toBe(1.5);
+    press(461);
+    expect(media().playbackRate).toBe(1);
+    expect(menuEntries()[1]).toBe('Playback Speed1\u00d7');
+  });
+
+  it('keeps what OK picked and closes the popover', () => {
+    setup();
+    openMenu();
+    press(13);
+    press(40);
+    press(13);
+    expect(document.querySelector('.picker')).toBeNull();
+    expect(media().style.objectFit).toBe('cover');
+    openMenu();
+    expect(menuEntries()[0]).toBe('Aspect RatioZoom');
+    press(13);
+    press(38);
+    press(461);
+    expect(media().style.objectFit).toBe('cover');
+  });
+
+  it('closes with a click next to the popover and puts back what was only being tried', () => {
+    setup();
+    openMenu();
+    press(13);
+    press(40);
+    expect(media().style.objectFit).toBe('cover');
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(document.querySelector('.picker')).toBeNull();
+    expect(media().style.objectFit).toBe('contain');
+    openMenu();
+    fireEvent.click(document.querySelector('.picker__panel') as HTMLElement);
+    expect(document.querySelector('.picker')).not.toBeNull();
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(document.querySelector('.picker')).toBeNull();
+  });
+});
+
+describe('Player settings popover styles', () => {
+  const css = fs.readFileSync(path.resolve(__dirname, '../../app/styles/styles.css'), 'utf8');
+
+  it('draws no dimming layer, which only the centered pickers keep', () => {
+    const popover = cssRules(css, '.picker--popover');
+    expect(popover).toHaveLength(1);
+    expect(popover[0].background).toBe('none');
+    expect(popover[0]['align-items']).toBe('flex-end');
+    expect(popover[0]['justify-content']).toBe('flex-end');
+    expect(cssRules(css, '.picker')[0].background).toBe('rgba(0, 0, 0, 0.7)');
+  });
+
+  it('is a compact dark panel whatever the theme, with the accent on the entry in use', () => {
+    const panel = cssRules(css, '.picker--popover .picker__panel');
+    expect(panel).toHaveLength(1);
+    expect(panel[0].width).toBe('560px');
+    expect(panel[0].color).toBe('#fff');
+    expect(panel[0].background).toMatch(/^rgba\(0, 0, 0, 0\.\d+\)$/);
+    expect(cssRules(css, '.picker--popover .pickerItem')[0].background).toMatch(/^rgba\(255, 255, 255, 0\.\d+\)$/);
+    expect(cssRules(css, '.picker--popover .pickerItem--active')[0].background).toBe('var(--accent)');
   });
 });
 
@@ -807,7 +1310,7 @@ describe('Player Stats for Nerds', () => {
     setMedia(media(), { currentTime: 30, duration: 600, paused: false });
     openMenu();
     expect(statsEntry()).toBe('Stats for NerdsOff');
-    press(40); press(40); press(40);
+    press(40); press(40);
     press(13);
     expect(document.querySelector('.picker')).toBeNull();
     const panel = document.querySelector('.playerStats') as HTMLElement;
@@ -817,7 +1320,7 @@ describe('Player Stats for Nerds', () => {
     act(() => { vi.advanceTimersByTime(2100); });
     openMenu();
     expect(statsEntry()).toBe('Stats for NerdsOn');
-    press(40); press(40); press(40);
+    press(40); press(40);
     press(13);
     expect(document.querySelector('.playerStats')).toBeNull();
   });
@@ -826,7 +1329,7 @@ describe('Player Stats for Nerds', () => {
     setSetting('statsForNerds', true);
     const first = setup();
     openMenu();
-    press(40); press(40); press(40);
+    press(40); press(40);
     press(13);
     first.unmount();
     setup();
@@ -836,16 +1339,30 @@ describe('Player Stats for Nerds', () => {
 
   it('describes the stream that is played', () => {
     setSetting('statsForNerds', true);
-    setSetting('quality', '720');
     setup({ video: { ...sample, size: 52428800, mediaType: 'video/mp4' } });
     setMedia(media(), { currentTime: 0, duration: 600 });
     openMenu();
-    press(40); press(40); press(40);
+    press(40); press(40);
     press(13);
     const text = document.querySelector('.playerStats')?.textContent ?? '';
-    expect(text).toContain('transcoded 720p');
+    expect(text).toContain('original file from odysee.com');
     expect(text).toContain('video/mp4, 50.0 MB');
     expect(text).toContain('about 0.70 Mbit/s');
+  });
+
+  it('says when it plays the transcoded stream', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('maybe');
+    mockApi((url) => (url.includes('player.odycdn.com') ? new Response(MASTER_TEXT, { headers: { 'Content-Type': 'application/x-mpegurl' } }) : undefined));
+    setSetting('statsForNerds', true);
+    setup({ video: { ...sample, id: 'stats-hls', claimName: 'name-stats-hls', sdHash: 'sd1', size: 52428800 } as Video });
+    await waitFor(() => expect(media().src).toContain('v0.m3u8'));
+    setMedia(media(), { currentTime: 0, duration: 600 });
+    openMenu();
+    press(40); press(40);
+    press(13);
+    const text = document.querySelector('.playerStats')?.textContent ?? '';
+    expect(text).toContain('adaptive stream (HLS) from player.odycdn.com');
+    expect(text).toContain('chosen by the player (original file about 0.70 Mbit/s)');
   });
 });
 

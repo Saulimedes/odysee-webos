@@ -21,6 +21,8 @@ export interface SharedPreferences {
 const KEY = 'acct:preferences';
 const TTL = 30 * 1000;
 
+let writes: Promise<boolean> = Promise.resolve(true);
+
 interface PreferenceResult { shared?: SharedPreferences & { value?: SharedPreferences } }
 
 async function fetchPreferences(): Promise<SharedPreferences> {
@@ -31,6 +33,7 @@ async function fetchPreferences(): Promise<SharedPreferences> {
 export async function getPreferences(): Promise<SharedPreferences | null> {
   if (!getToken() || !isLoggedIn()) return null;
   try {
+    await writes;
     return await query(KEY, fetchPreferences, { ttl: TTL });
   } catch (error) {
     console.error('Failed to get preferences', error);
@@ -38,7 +41,7 @@ export async function getPreferences(): Promise<SharedPreferences | null> {
   }
 }
 
-export async function updatePreferences(mutate: (shared: SharedPreferences) => SharedPreferences) {
+async function write(mutate: (shared: SharedPreferences) => SharedPreferences) {
   const token = getToken();
   if (!token || !isLoggedIn()) return false;
   invalidate(KEY);
@@ -54,4 +57,9 @@ export async function updatePreferences(mutate: (shared: SharedPreferences) => S
     console.error('Failed to save preferences', error);
     return false;
   }
+}
+
+export function updatePreferences(mutate: (shared: SharedPreferences) => SharedPreferences) {
+  writes = writes.then(() => write(mutate));
+  return writes;
 }

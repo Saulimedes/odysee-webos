@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { KEY, useSetting } from '@/shared/config';
 import { useTranslation } from '@/shared/i18n';
 import { useKeys, PRIORITY, cycle, pointerMoved } from '@/shared/lib';
-import { Avatar } from '@/shared/ui';
+import { Avatar, SquircleDefs } from '@/shared/ui';
 import { useSession } from '@/entities/session';
 import { useLayout, visibleItems } from '@/features/customize-layout';
 import { LOCKED_ITEMS, LOGIN_ITEM, SIDEBAR_ITEMS, splitBlocks, type SidebarItem } from '../model/items';
@@ -93,8 +93,9 @@ export function Sidebar({ selected, focused, onSelect, onLeave, onFocus }: Props
         onClick={brand ? () => onSelect(brand.id) : undefined}
         onMouseMove={brand ? (event) => { if (pointerMoved(event)) setIndex(0); } : undefined}
       >
-        {!brand && user?.profile_image ? <Avatar src={user.profile_image} name={user.channel?.name || 'U'} size={52} /> : <img src="icon.png" alt="" width={52} height={52} />}
+        {!brand && user?.profile_image ? <Avatar src={user.profile_image} name={user.channel?.name || 'U'} size={52} className="avatar--corners" /> : <img src="icon.png" alt="" width={52} height={52} />}
         <span className="sidebar__label sidebar__brandName">{brand ? t(brand.label) : user?.channel?.name ? `@${user.channel.name}` : 'Odysee'}</span>
+        <SquircleDefs />
       </div>
       <div className="sidebar__main">
         {middle.map((block, blockIndex) => <div key={blockIndex} className="sidebar__group">{block.map(renderItem)}</div>)}

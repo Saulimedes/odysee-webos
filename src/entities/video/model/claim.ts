@@ -16,13 +16,13 @@ export function parseClaim(claim: RawClaim): Video {
     channelTitle: channel.value?.title || channelName,
     channelThumb: channel.value?.thumbnail?.url,
     claimName: claim.name,
-    hash: value.source?.hash,
     size: Number(value.source?.size) || undefined,
     mediaType: value.source?.media_type,
+    sdHash: value.source?.sd_hash,
   };
 }
 
-type Stored = Partial<Video> & { thumbnail?: string; channelThumbnail?: string; _claimName?: string; _sourceHash?: string };
+type Stored = Partial<Video> & { thumbnail?: string; channelThumbnail?: string; _claimName?: string };
 
 export function normalizeVideo(raw: unknown): Video | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -42,9 +42,9 @@ export function normalizeVideo(raw: unknown): Video | null {
     channelTitle: stored.channelTitle || stored.channelName || 'Anonymous',
     channelThumb: stored.channelThumb || stored.channelThumbnail,
     claimName,
-    hash: stored.hash || stored._sourceHash,
     size: Number(stored.size) || undefined,
     mediaType: typeof stored.mediaType === 'string' ? stored.mediaType : undefined,
+    sdHash: typeof stored.sdHash === 'string' && stored.sdHash ? stored.sdHash : undefined,
   };
 }
 

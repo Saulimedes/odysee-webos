@@ -1,12 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { KEY } from '@/shared/config';
 import { LOADER_MARKUP } from '@/shared/branding';
 import { useTranslation } from '@/shared/i18n';
-import { PRIORITY, cycle, pointerMoved, useKeys } from '@/shared/lib';
+import { PRIORITY, cycle, isEnterHeld, pointerMoved, useKeys } from '@/shared/lib';
 import { VirtualGrid } from './VirtualGrid';
 
 const ITEM_HEIGHT = 84;
 const VISIBLE = 7;
+const POPOVER_ITEM_HEIGHT = 72;
+const POPOVER_VISIBLE = 5;
+const POPOVER_CELL_WIDTH = 496;
+// A list that fits needs this much more room than its rows, or the grid scrolls a little whenever the last row is picked
+const GRID_PAD = 12;
 
 export interface PickerOption {
   code: string | number;
@@ -23,13 +28,19 @@ interface Props {
   options: PickerOption[];
   value: string | number;
   variant?: 'swatch' | 'font' | 'theme' | 'loader';
+  placement?: 'center' | 'popover';
   onPreview?: (code: string | number) => void;
+  onDismiss?: () => void;
   onClose: (confirmed: boolean, code: string | number) => void;
 }
 
-export function OptionPicker({ title, options, value, variant, onPreview, onClose }: Props) {
+export function OptionPicker({ title, options, value, variant, placement = 'center', onPreview, onDismiss, onClose }: Props) {
   const t = useTranslation();
   const [index, setIndex] = useState(() => Math.max(0, options.findIndex((option) => option.code === value)));
+  const armed = useRef(!isEnterHeld());
+  const popover = placement === 'popover';
+  const itemHeight = popover ? POPOVER_ITEM_HEIGHT : ITEM_HEIGHT;
+  const height = !popover ? ITEM_HEIGHT * VISIBLE : options.length <= POPOVER_VISIBLE ? options.length * itemHeight + GRID_PAD : POPOVER_VISIBLE * itemHeight;
 
   useEffect(() => { onPreview?.(options[index].code); }, [index, options, onPreview]);
 
@@ -38,26 +49,37 @@ export function OptionPicker({ title, options, value, variant, onPreview, onClos
     switch (event.keyCode) {
       case KEY.UP: setIndex((current) => cycle(current, -1, options.length)); return true;
       case KEY.DOWN: setIndex((current) => cycle(current, 1, options.length)); return true;
-      case KEY.ENTER: onClose(true, code); return true;
+      case KEY.ENTER:
+        if (armed.current && !event.repeat) onClose(true, code);
+        return true;
       case KEY.WEBOS_BACK:
       case KEY.ESCAPE:
       case KEY.BACKSPACE:
       case KEY.LEFT: onClose(false, code); return true;
       default: return true;
     }
-  }, { priority: PRIORITY.overlay });
+  }, {
+    priority: PRIORITY.overlay,
+    onKeyUp: (event) => {
+      if (event.keyCode === KEY.ENTER) armed.current = true;
+      return false;
+    },
+  });
 
   return (
-    <div className="picker">
+    <div
+      className={`picker${popover ? ' picker--popover' : ''}`}
+      onClick={popover && onDismiss ? (event) => { if (event.target === event.currentTarget) onDismiss(); } : undefined}
+    >
       <div className="picker__panel">
         <h2>{title}</h2>
         <VirtualGrid
           items={options}
           columns={1}
-          cellWidth={640}
-          cellHeight={ITEM_HEIGHT - 8}
+          cellWidth={popover ? POPOVER_CELL_WIDTH : 640}
+          cellHeight={itemHeight - 8}
           gap={8}
-          height={ITEM_HEIGHT * VISIBLE}
+          height={height}
           activeIndex={index}
           getKey={(option) => String(option.code)}
           renderItem={(option, at) => (

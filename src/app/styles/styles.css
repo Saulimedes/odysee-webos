@@ -59,6 +59,10 @@ input { font-family: inherit; }
   border-radius: 50%; background: var(--accent); color: var(--accent-contrast); font-weight: 600;
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-corners='square'] .avatar--corners { border-radius: 0; }
+/* The layer keeps the accent behind a photo from showing at the cut edge */
+html[data-corners='classic'] .avatar--corners { border-radius: 0; clip-path: url(#squircle); will-change: transform; }
+.squircleDefs { position: absolute; width: 0; height: 0; overflow: hidden; }
 
 .appShell { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--canvas, none), var(--bg); }
 .appShell__main { position: absolute; top: 0; bottom: 0; left: var(--sidebar-w); right: 0; overflow: hidden; }
@@ -85,8 +89,8 @@ html[data-theme='ambient'] .sidebar--open { background: linear-gradient(135deg, 
 .sidebar__brand--selected { background: rgba(var(--accent-rgb), 0.12); box-shadow: inset 5px 0 0 var(--accent); }
 .sidebar__brand--active { background: rgba(var(--accent-rgb), 0.2); }
 .sidebar__brand--active .sidebar__brandName { color: var(--accent-text); }
-.sidebar__brand img { border-radius: var(--radius-md); }
-[data-theme='light'] .sidebar__brand img, [data-theme='lighttinted'] .sidebar__brand img { filter: brightness(0); }
+.sidebar__brand > img { border-radius: var(--radius-md); }
+[data-theme='light'] .sidebar__brand > img, [data-theme='lighttinted'] .sidebar__brand > img { filter: brightness(0); }
 .sidebar__brandName { font-weight: 600; margin-left: 16px; }
 .sidebar__group { padding: 8px 12px; }
 .sidebar__group + .sidebar__group { border-top: 1px solid var(--border-color); }
@@ -269,9 +273,17 @@ html[data-icons='dynamic'] .videoRow--active .odyIcon, html[data-icons='dynamic'
 .picker__panel h2 { margin: 0 0 18px; font-size: calc(34px * var(--text-scale)); }
 .pickerItem { display: flex; align-items: center; height: 100%; padding: 0 24px; border-radius: var(--radius-md); font-size: calc(30px * var(--text-scale)); background: var(--surface-alt); }
 .pickerItem--active { background: var(--accent); color: var(--accent-contrast); }
+/* The animations are drawn in the accent, which would vanish into the row that is picked */
+.pickerItem--active .loaderPreview { --accent: var(--accent-contrast); --accent-rgb: var(--accent-contrast-rgb); --text: rgba(var(--accent-contrast-rgb), 0.6); }
 .pickerItem__current { margin-left: auto; font-size: calc(20px * var(--text-scale)); opacity: 0.7; }
 .pickerItem__icon { display: inline-flex; flex-shrink: 0; margin-right: 18px; }
 .pickerItem__value { margin-left: auto; padding-left: 24px; font-size: calc(26px * var(--text-scale)); opacity: 0.75; white-space: nowrap; }
+/* The player settings sit above the gear and leave the picture alone, they are dark whatever the theme like the rest of the OSD */
+.picker--popover { box-sizing: border-box; align-items: flex-end; justify-content: flex-end; padding: 0 52px 270px 0; background: none; }
+.picker--popover .picker__panel { width: 560px; padding: 22px 32px 28px; background: rgba(0, 0, 0, 0.88); color: #fff; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+.picker--popover .picker__panel h2 { margin: 0 0 10px; font-size: calc(30px * var(--text-scale)); }
+.picker--popover .pickerItem { background: rgba(255, 255, 255, 0.1); font-size: calc(28px * var(--text-scale)); }
+.picker--popover .pickerItem--active { background: var(--accent); }
 
 .themeSwatch { position: relative; display: inline-block; flex-shrink: 0; width: 52px; height: 34px; margin-right: 14px; overflow: hidden; border: 2px solid; border-radius: var(--radius-sm); }
 .themeSwatch b { position: absolute; top: 5px; left: 5px; width: 24px; height: 18px; border-radius: 2px; }
@@ -350,3 +362,41 @@ html[data-icons='dynamic'] .videoRow--active .odyIcon, html[data-icons='dynamic'
   color: #fff; font-size: 24px; white-space: nowrap; pointer-events: none; visibility: hidden; transform: translateX(-50%);
 }
 .timeline__label--visible { visibility: visible; }
+
+.channelHeader { display: flex; align-items: center; height: 168px; padding: 14px 0; overflow: hidden; }
+.channelHeader .avatar { flex-shrink: 0; margin-right: 28px; }
+.channelHeader__text { flex: 1; min-width: 0; }
+.channelHeader__text h1 { margin: 0; font-size: calc(46px * var(--text-scale)); line-height: 1.1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.channelHeader__handle { margin-top: 4px; font-size: calc(24px * var(--text-scale)); color: var(--text-muted); }
+.channelHeader__about {
+  margin: 6px 0 0; font-size: calc(22px * var(--text-scale)); line-height: 1.3; color: var(--text-dim); max-height: 1.3em; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+}
+.channelHeader__follow {
+  display: flex; align-items: center; flex-shrink: 0; margin-left: 32px; padding: 0 36px; height: 72px; border-radius: 36px;
+  background: var(--surface-hover); color: var(--text); font-size: calc(28px * var(--text-scale)); cursor: pointer;
+}
+.channelHeader__follow svg { margin-right: 14px; }
+.channelHeader__follow--on { color: var(--accent-text); }
+.channelHeader__follow--active { background: var(--accent); color: var(--accent-contrast); }
+
+.searchInput__filters { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 60px; height: 60px; margin-left: 18px; border-radius: 50%; cursor: pointer; }
+.searchInput__filters--on svg { color: var(--accent-text); }
+.searchInput__filters--on::after { content: ''; position: absolute; top: 8px; right: 8px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+.searchInput__filters--active { background: var(--accent); }
+.searchInput__filters--active svg { color: var(--accent-contrast); }
+
+.player__upNext {
+  position: absolute; right: 40px; bottom: 270px; z-index: 6; display: flex; align-items: center; width: 780px; padding: 20px;
+  border-radius: var(--radius-lg); background: rgba(0, 0, 0, 0.88); box-shadow: 0 0 0 3px var(--accent);
+}
+.player__upNextThumb { position: relative; flex: 0 0 320px; height: 180px; overflow: hidden; border-radius: var(--radius-md); background: #222; }
+.player__upNextText { flex: 1; min-width: 0; margin-left: 24px; }
+.player__upNextLabel { font-size: 22px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-text); }
+.player__upNextTitle {
+  margin-top: 6px; font-size: 30px; line-height: 1.25; max-height: 2.5em; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.player__upNextCount { margin-top: 12px; font-size: 28px; font-weight: 600; }
+.player__upNext small { display: block; margin-top: 8px; font-size: 22px; color: #aaa; }
+

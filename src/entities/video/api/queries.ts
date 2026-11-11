@@ -4,6 +4,7 @@ import { parseClaim } from '../model/claim';
 import type { RawClaim, Video } from '../model/types';
 
 export const DEFAULT_PAGE_SIZE = 20;
+const MAX_CLAIM_IDS = 50;
 const TTL = 5 * 60 * 1000;
 const DAY = 86400;
 const HOUR = 3600;
@@ -93,9 +94,14 @@ export function queryClaims(feed: FeedQuery, { persist = false, background = fal
   }, { ttl: TTL, persist });
 }
 
-export async function resolveVideos(claimIds: string[]): Promise<Video[]> {
+export async function resolveVideos(claimIds: string[], options?: QueryOptions): Promise<Video[]> {
   if (claimIds.length === 0) return [];
-  const videos = await queryClaims({ claimIds });
-  const byId = new Map(videos.map((video) => [video.id, video]));
+  const chunks: string[][] = [];
+  for (let at = 0; at < claimIds.length; at += MAX_CLAIM_IDS) chunks.push(claimIds.slice(at, at + MAX_CLAIM_IDS));
+  const found: Video[][] = [];
+  // A background lookup holds one request slot at a time, so the rows on screen are not left waiting for one
+  if (options?.background) for (const chunk of chunks) found.push(await queryClaims({ claimIds: chunk }, options));
+  else found.push(...(await Promise.all(chunks.map((chunk) => queryClaims({ claimIds: chunk }, options)))));
+  const byId = new Map(found.flat().map((video) => [video.id, video]));
   return claimIds.map((id) => byId.get(id)).filter((video): video is Video => video !== undefined);
 }

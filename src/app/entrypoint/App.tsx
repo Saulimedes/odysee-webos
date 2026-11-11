@@ -10,6 +10,7 @@ import { handleLogin, handleLogout } from '../model/account';
 
 const loadPlayer = () => import('@/widgets/player');
 const Player = lazy(() => loadPlayer().then((module) => ({ default: module.Player })));
+const VideoMenu = lazy(() => import('@/widgets/video-menu').then((module) => ({ default: module.VideoMenu })));
 const PLAYER_PREFETCH_MS = 3000;
 
 const BACK_TARGET: Record<string, string> = { continue: 'library', history: 'library', 'watch-later': 'library', favorites: 'library' };
@@ -20,7 +21,8 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const [sidebarFocused, setSidebarFocused] = useState(false);
   const [channel, setChannel] = useState<{ id: string; name: string } | null>(null);
-  const [playing, setPlaying] = useState<{ video: Video; startAt?: number } | null>(null);
+  const [playing, setPlaying] = useState<{ video: Video; queue?: Video[] } | null>(null);
+  const [menu, setMenu] = useState<Video | null>(null);
   useWheelNavigation();
 
   useEffect(() => {
@@ -42,10 +44,11 @@ export default function App() {
     setSidebarFocused(false);
   }, []);
 
-  const play = useCallback((video: Video, startAt?: number) => {
+  const play = useCallback((video: Video, queue?: Video[]) => setPlaying({ video, queue }), []);
+
+  const started = useCallback((video: Video) => {
     removeFromCollection('watchLater', video.id);
     addToHistory(video);
-    setPlaying({ video, startAt });
   }, []);
 
   const nav = useMemo<NavApi<Video>>(() => ({
@@ -53,6 +56,7 @@ export default function App() {
     focusSidebar: () => setSidebarFocused(true),
     play,
     openChannel: (id, name) => { setChannel({ id, name }); go('channel'); },
+    openMenu: setMenu,
     go,
   }), [sidebarFocused, play, go]);
 
@@ -82,10 +86,11 @@ export default function App() {
           <Player
             key={playing.video.id}
             video={playing.video}
-            startAt={playing.startAt}
+            queue={playing.queue}
             onClose={() => setPlaying(null)}
-            onPlayNext={(next) => play(next)}
+            onPlayNext={(next) => play(next, playing.queue)}
             onOpenChannel={nav.openChannel}
+            onStarted={started}
           />
         </Suspense>
       ) : (
@@ -99,6 +104,11 @@ export default function App() {
               onSignOut={() => { void handleLogout().then(() => go('home')); }}
             />
           </main>
+          {menu && (
+            <Suspense fallback={null}>
+              <VideoMenu video={menu} onPlay={play} onOpenChannel={nav.openChannel} onClose={() => setMenu(null)} />
+            </Suspense>
+          )}
         </div>
       )}
     </NavContext.Provider>

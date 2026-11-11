@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { bodyOf, claim, flush, mockFetch, rpcResult } from '../../tests/helpers';
-import { hoverOver, setViewport, shakeOver } from '../../tests/render';
+import { bodyOf, claim, flush, mockFetch, rpcResult, video } from '../../tests/helpers';
+import type { Video } from '@/entities/video';
+import { hoverOver, setViewport, shakeOver, tapOk } from '../../tests/render';
 import { invalidate } from '@/shared/api';
 import { forgetRemembered } from '@/shared/lib/remember';
 import { session } from '@/entities/session/model/store';
@@ -12,7 +13,7 @@ import App from './entrypoint/App';
 import { bootSession, handleLogin, handleLogout } from './model/account';
 import { retireServiceWorker } from './model/retireServiceWorker';
 
-const press = (keyCode: number) => fireEvent.keyDown(window, { keyCode });
+const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 
 const content = { status: 'success', data: { en: { categories: { GAMING: { label: 'Gaming', channelIds: ['g1'], sortOrder: 1, pageSize: 6 } } } } };
 
@@ -123,28 +124,69 @@ describe('App', () => {
     expect(document.querySelector('.sidebar--open')).toBeNull();
   });
 
-  it('plays a video, saves it in history and returns to the same screen', async () => {
+  it('plays a video, saves it in history once it plays and returns to the same screen', async () => {
     api();
     await act(async () => { await refreshHomepage(true); });
     render(<App />);
     await screen.findByText('Game 0');
-    press(13);
-    expect(collections.get().history).toHaveLength(1);
+    tapOk();
     expect(document.querySelector('.appShell')).toBeNull();
     expect(document.querySelector('.player')).not.toBeNull();
     await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
+    expect(collections.get().history).toHaveLength(0);
+    fireEvent(document.querySelector('video') as HTMLVideoElement, new Event('playing'));
+    expect(collections.get().history).toHaveLength(1);
     press(461);
     press(461);
     expect(await screen.findByText('Game 0')).toBeInTheDocument();
   });
 
-  it('removes a played video from Watch Later', async () => {
+  it('takes a played video out of Watch Later only once it plays, so a failed start keeps it', async () => {
     api();
     await act(async () => { await refreshHomepage(true); });
     render(<App />);
     await screen.findByText('Game 0');
-    const first = collections.get();
-    expect(first.watchLater).toEqual([]);
+    collections.set({ watchLater: [video('g-1-0') as Video], favorites: [], history: [] });
+    tapOk();
+    await waitFor(() => expect(document.querySelector('video')).not.toBeNull());
+    const element = document.querySelector('video') as HTMLVideoElement;
+    Object.defineProperty(element, 'error', { value: { code: 4, message: 'refused' }, configurable: true });
+    fireEvent(element, new Event('error'));
+    expect(collections.get().watchLater).toHaveLength(1);
+    expect(collections.get().history).toHaveLength(0);
+    fireEvent(element, new Event('playing'));
+    expect(collections.get().watchLater).toEqual([]);
+    expect(collections.get().history.map((entry) => entry.id)).toEqual(['g-1-0']);
+  });
+
+  it('opens the menu of a video when OK is held, saves it for later, and leaves the video alone', async () => {
+    api();
+    await act(async () => { await refreshHomepage(true); });
+    render(<App />);
+    await screen.findByText('Game 0');
+    fireEvent.keyDown(window, { keyCode: 13 });
+    expect(await screen.findByText('Add to Watch Later')).toBeInTheDocument();
+    expect(document.querySelector('.player')).toBeNull();
+    fireEvent.keyUp(window, { keyCode: 13 });
+    press(40);
+    press(13);
+    await waitFor(() => expect(screen.queryByText('Add to Watch Later')).toBeNull());
+    expect(collections.get().watchLater.map((entry) => entry.id)).toEqual(['g-1-0']);
+    expect(document.querySelector('.player')).toBeNull();
+    expect(document.querySelector('.appShell')).not.toBeNull();
+  });
+
+  it('opens the menu of a video, and the channel from it', async () => {
+    api();
+    await act(async () => { await refreshHomepage(true); });
+    render(<App />);
+    await screen.findByText('Game 0');
+    fireEvent.contextMenu(screen.getByText('Game 1'));
+    expect(await screen.findByText('Go to channel')).toBeInTheDocument();
+    press(38);
+    press(13);
+    await waitFor(() => expect(document.querySelector('.channelHeader')).not.toBeNull());
+    expect(document.querySelector('.player')).toBeNull();
   });
 
   it('handles the back button on every level', async () => {

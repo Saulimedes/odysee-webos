@@ -11,13 +11,15 @@ interface Props {
   progress?: number;
   onSelect: (index: number) => void;
   onHover?: (index: number) => void;
+  onMenu?: (index: number) => void;
 }
 
-export const VideoCard = memo(function VideoCard({ video, index, active, thumbWidth, progress = 0, onSelect, onHover }: Props) {
+export const VideoCard = memo(function VideoCard({ video, index, active, thumbWidth, progress = 0, onSelect, onHover, onMenu }: Props) {
   return (
     <div
       className={`card${active ? ' card--active' : ''}`}
       onClick={() => onSelect(index)}
+      onContextMenu={onMenu ? (event) => { event.preventDefault(); onMenu(index); } : undefined}
       onMouseMove={onHover ? (event) => { if (pointerMoved(event)) onHover(index); } : undefined}
     >
       <div className="card__thumb">
