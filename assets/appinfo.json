@@ -8,7 +8,6 @@
   "iconColor": "#DE0050",
   "appDescription": "Odysee - Watch videos on LBRY",
   "icon": "icon80.png",
-  "splashBackground": "splash.png",
   "largeIcon": "icon130.png",
   "disableBackHistoryAPI": true
 }
