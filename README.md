@@ -41,7 +41,22 @@ The dev server also loads hls.js, so browsers without HLS of their own (Firefox)
 
 ### Deploy to the TV
 
-Enable Developer Mode on the TV and add it with `ares-setup-device`, then run `npm run build`, `npm run package`, `npm run deploy` and `npm run launch`. `npm run package` runs `ares-package` on Node 20, because newer Node writes every file with timestamp 0 and webOS then refuses the ipk.
+Turn on Developer Mode on the TV and add it once, see the [webOS Brew setup guide](https://www.webosbrew.org/develop/guides/env-setup) for the key and passphrase:
+
+```bash
+npx ares-setup-device --add tv -i "host=<TV_IP>" -i "port=9922" -i "username=prisoner" -i "default=true"
+```
+
+Then build, install and start the app:
+
+```bash
+npm run build
+npm run package    # creates org.webosbrew.odysee_<version>_all.ipk
+npm run deploy     # installs it on the default device
+npm run launch
+```
+
+`npm run package` runs `ares-package` on Node 20, because newer Node writes every file with timestamp 0 and webOS then refuses the ipk.
 
 ## Credits
 
