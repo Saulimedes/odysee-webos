@@ -21,13 +21,11 @@ Unofficial Odysee client for LG webOS TVs.
 
 ## Installation
 
-You can install the app using one of the following methods:
+Needs webOS 5 or newer.
 
-- **[webOS Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel):** Odysee is not in the official [webOS Brew repository](https://repo.webosbrew.org/) yet. Once it is listed, it will be available at `https://repo.webosbrew.org/apps/org.webosbrew.odysee/` and installs and updates from the Homebrew Channel on the TV.
-- **[Device Manager](https://github.com/webosbrew/dev-manager-desktop):** Use the pre-built `.ipk` file from the [Releases](https://github.com/Saulimedes/odysee-webos/releases) page.
-- **Command Line (webOS CLI):** Build it and install it yourself, see [Deploy to the TV](#deploy-to-the-tv).
-
-The target is Chrome 68 (webOS 5). The production build uses ES2019 syntax or older, `npm run build` checks that, and `npm run test:chrome68` runs the app in a real Chrome 68.
+- **[Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel):** Install and update Odysee from the app list on the TV.
+- **[Device Manager](https://github.com/webosbrew/dev-manager-desktop):** Install the `.ipk` from the [Releases](https://github.com/Saulimedes/odysee-webos/releases) page.
+- **Command line:** Build and deploy it yourself, see [Deploy to the TV](#deploy-to-the-tv).
 
 ## Development
 
