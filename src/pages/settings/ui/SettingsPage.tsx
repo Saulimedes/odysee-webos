@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { IconEdit, IconLogout, IconTrash } from '@tabler/icons-react';
+import { IconEdit, IconLogin, IconLogout, IconTrash } from '@tabler/icons-react';
 import { KEY, THEME_MODES, getSetting, paletteFor, setSetting, useSetting, type SettingKey } from '@/shared/config';
 import { useTranslation } from '@/shared/i18n';
-import { PRIORITY, cycle, pointerMoved, useKeys, useRemembered } from '@/shared/lib';
+import { PRIORITY, cycle, pointerMoved, useKeys, useNav, useRemembered } from '@/shared/lib';
 import { Avatar, OptionPicker, ThemeSwatch, VirtualGrid, type PickerOption } from '@/shared/ui';
 import { invalidate } from '@/shared/api';
 import { useHomepage } from '@/entities/category';
@@ -68,9 +68,10 @@ interface DetailProps {
 function SettingsDetail({ category, enabled, width, onSignOut }: DetailProps) {
   const t = useTranslation();
   const { user } = useSession();
+  const nav = useNav<unknown>();
   const [textScale] = useSetting('textScale');
   const [followHome, setFollowHome] = useSetting('categoriesFollowHome');
-  const rows = useMemo(() => category.rows.filter((row) => row.kind !== 'account' || user), [category, user]);
+  const { rows } = category;
   const grouped = rows.some((row) => 'section' in row && row.section);
   const [stored, setIndex] = useRemembered(`settings:${category.id}:row`, 0);
   const index = Math.min(stored, rows.length - 1);
@@ -92,8 +93,10 @@ function SettingsDetail({ category, enabled, width, onSignOut }: DetailProps) {
   const row = rows[index];
 
   const activate = (target: SettingsRow) => {
-    if (target.kind === 'account') onSignOut();
-    else if (target.kind === 'toggle') {
+    if (target.kind === 'account') {
+      if (user) onSignOut();
+      else nav.go('login');
+    } else if (target.kind === 'toggle') {
       if (!target.requiresLogin || user) write(target.key, !getSetting(target.key));
     } else if (target.kind === 'choice') {
       original.current = getSetting(target.key);
@@ -152,6 +155,16 @@ function SettingsDetail({ category, enabled, width, onSignOut }: DetailProps) {
                     <Avatar src={user.profile_image} name={user.primary_email || 'U'} size={72} />
                     <div className="row__text"><div className="row__label">{user.primary_email}</div>{user.channel?.name && <div className="row__hint">@{user.channel.name}</div>}</div>
                     <span className="row__button"><IconLogout size={32} /> {t('Sign Out')}</span>
+                  </>
+                )}
+                {item.kind === 'account' && !user && (
+                  <>
+                    <span className="chip"><IconLogin size={30} /></span>
+                    <div className="row__text">
+                      <div className="row__label">{t('Sign in to Odysee')}</div>
+                      <div className="row__hint">{t('Sign in to access your subscriptions and watchlist')}</div>
+                    </div>
+                    <span className="row__button"><IconLogin size={32} /> {t('Sign In')}</span>
                   </>
                 )}
                 {(item.kind === 'toggle' || item.kind === 'choice') && (

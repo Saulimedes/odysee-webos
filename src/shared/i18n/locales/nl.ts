@@ -199,7 +199,7 @@ export default {
   "Loading Animation": "Laadanimatie",
   "Shown whenever a page or the player is loading. The ring is the lightest on older TVs": "Wordt getoond terwijl een pagina of de speler laadt. De ring is het lichtst op oudere tv's",
   "Logo Button": "Logoknop",
-  "The Odysee logo can be the button for Home or for Settings. It then replaces that entry in the menu, so it is never both": "Het Odysee-logo kan de knop voor Start of voor Instellingen zijn. Het vervangt dan dat item in het menu, dus nooit beide",
+  "Home or Settings turns the logo into that button and takes the entry out of the menu. Login shows who is signed in": "Start of Instellingen maakt van het logo die knop en haalt het item uit het menu. Inloggen toont wie is ingelogd",
   "Back Button": "Terugknop",
   "Shows a back arrow at the top left of the player controls. The Back key of the remote works either way": "Toont een terugpijl linksboven in de bediening van de speler. De Terug-toets van de afstandsbediening werkt in beide gevallen",
   "Twin Arcs": "Twee bogen",

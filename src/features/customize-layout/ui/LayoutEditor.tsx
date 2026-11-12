@@ -2,9 +2,9 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { IconArrowsUpDown, IconEye, IconEyeOff, IconLock, IconRotate } from '@tabler/icons-react';
 import { KEY, useSetting } from '@/shared/config';
 import { useTranslation } from '@/shared/i18n';
-import { PRIORITY, cycle, pointerMoved, useKeys } from '@/shared/lib';
+import { PRIORITY, cycle, pointerMoved, useBackdropClick, useKeys } from '@/shared/lib';
 import { VirtualGrid } from '@/shared/ui';
-import { arrange, moveEntry, resetLayout, toggleEntry, useLayout, type LayoutKind } from '../model/layout';
+import { arrange, isHidden, moveEntry, resetLayout, toggleEntry, useLayout, type LayoutKind } from '../model/layout';
 
 const ROW_HEIGHT = 84;
 const VISIBLE_ROWS = 7;
@@ -15,6 +15,7 @@ export interface LayoutEntry {
   icon?: ReactNode;
   note?: string;
   locked?: boolean;
+  hiddenByDefault?: boolean;
 }
 
 export interface LayoutOption {
@@ -49,6 +50,7 @@ export function LayoutEditor({ kind, title, entries, option, onClose }: Props) {
   const [moving, setMoving] = useState(false);
   const at = Math.min(index, rows.length - 1);
   const current = rows[at];
+  const backdrop = useBackdropClick(onClose);
 
   const activate = (row: Row) => {
     if (row.kind === 'reset') {
@@ -57,7 +59,7 @@ export function LayoutEditor({ kind, title, entries, option, onClose }: Props) {
     } else if (row.kind === 'option') {
       option?.onToggle();
     } else if (!row.entry.locked) {
-      toggleEntry(kind, row.id);
+      toggleEntry(kind, row.id, row.entry.hiddenByDefault);
     }
   };
 
@@ -97,7 +99,7 @@ export function LayoutEditor({ kind, title, entries, option, onClose }: Props) {
   }, { priority: PRIORITY.overlay });
 
   return (
-    <div className="picker">
+    <div className="picker" {...backdrop}>
       <div className="picker__panel layoutEditor">
         <h2>{title}</h2>
         <VirtualGrid
@@ -128,7 +130,7 @@ export function LayoutEditor({ kind, title, entries, option, onClose }: Props) {
               );
             }
             const { entry } = row;
-            const hidden = !entry.locked && layout.hidden.includes(entry.id);
+            const hidden = !entry.locked && isHidden(entry, layout);
             return (
               <div
                 className={`layoutRow${active ? ' layoutRow--active' : ''}${active && moving ? ' layoutRow--moving' : ''}${hidden ? ' layoutRow--hidden' : ''}`}

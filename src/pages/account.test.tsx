@@ -482,20 +482,44 @@ describe('SettingsPage', () => {
     await openPage('Account');
     expect(rowLabels()).toEqual(['me@example.com', 'Show mature content', 'Clear Cache']);
     expect(activeRow()).toBe('me@example.com');
-    expect(texts('.row__section')).toEqual(['', 'Content', 'Storage']);
+    expect(texts('.row__section')).toEqual(['Login', 'Content', 'Storage']);
     expect(screen.getByText('Sign Out')).toBeInTheDocument();
     expect(screen.queryByText('Sign in required')).toBeNull();
+    expect(screen.queryByText('Sign in to Odysee')).toBeNull();
   });
 
-  it('shows mature content and the cache without an account row when signed out', async () => {
+  it('puts the sign in row above mature content and the cache when signed out', async () => {
     setup();
     await openPage('Account');
     expect(heading()).toBe('Account');
-    expect(rowLabels()).toEqual(['Show mature content', 'Clear Cache']);
-    expect(texts('.row__section')).toEqual(['Content', 'Storage']);
-    expect(activeRow()).toBe('Show mature content');
+    expect(rowLabels()).toEqual(['Sign in to Odysee', 'Show mature content', 'Clear Cache']);
+    expect(texts('.row__section')).toEqual(['Login', 'Content', 'Storage']);
+    expect(activeRow()).toBe('Sign in to Odysee');
+    expect(screen.getByText('Sign in to access your subscriptions and watchlist')).toBeInTheDocument();
+    expect(document.querySelector('.row--active .row__button')?.textContent).toBe(' Sign In');
+    expect(document.querySelector('.row--active svg.tabler-icon-login')).not.toBeNull();
     expect(screen.getByText('Sign in required')).toBeInTheDocument();
     expect(screen.queryByText('Sign Out')).toBeNull();
+  });
+
+  it('opens the login screen from the sign in row with OK or a click', async () => {
+    const { nav } = setup();
+    await openPage('Account');
+    press(13);
+    expect(nav.go).toHaveBeenCalledTimes(1);
+    expect(nav.go).toHaveBeenLastCalledWith('login');
+    fireEvent.click(screen.getByText('Sign In'));
+    expect(nav.go).toHaveBeenCalledTimes(2);
+    expect(nav.go).toHaveBeenLastCalledWith('login');
+  });
+
+  it('does not open the login screen from the signed in account row, which signs out', async () => {
+    session.set({ token: 't', user: { primary_email: 'me@example.com' } });
+    const { nav, onSignOut } = setup();
+    await openPage('Account');
+    press(13);
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+    expect(nav.go).not.toHaveBeenCalled();
   });
 
   it('remembers the page, the zone and the row of every page when the page remounts', async () => {
@@ -535,9 +559,10 @@ describe('SettingsPage', () => {
     expect(rowLabels()).toContain(de.Theme);
     await openPage(de.Account);
     expect(heading()).toBe(de.Account);
-    expect(rowLabels()).toEqual([de['Show mature content'], de['Clear Cache']]);
-    expect(texts('.row__section')).toEqual([de.Content, de.Storage]);
+    expect(rowLabels()).toEqual([de['Sign in to Odysee'], de['Show mature content'], de['Clear Cache']]);
+    expect(texts('.row__section')).toEqual([de.Login, de.Content, de.Storage]);
     expect(screen.getByText(de['Sign in required'])).toBeInTheDocument();
+    expect(document.querySelector('.row__button')?.textContent).toBe(` ${de['Sign In']}`);
   });
 
   it('toggles switches with OK', async () => {
@@ -680,7 +705,7 @@ describe('SettingsPage', () => {
     await openSetting('Customize', 'Logo Button');
     expect(getSetting('logoButton')).toBe('off');
     press(13);
-    expect(Array.from(document.querySelectorAll('.pickerItem')).map((item) => item.textContent?.replace('current', ''))).toEqual(['Off', 'Home', 'Settings']);
+    expect(Array.from(document.querySelectorAll('.pickerItem')).map((item) => item.textContent?.replace('current', ''))).toEqual(['Off', 'Home', 'Settings', 'Login']);
     press(40);
     expect(getSetting('logoButton')).toBe('home');
     press(461);
@@ -691,6 +716,15 @@ describe('SettingsPage', () => {
     expect(activeRow()).toBe('Logo Button');
     pickNext('Logo Button');
     expect(getSetting('logoButton')).toBe('settings');
+    pickNext('Logo Button');
+    expect(getSetting('logoButton')).toBe('login');
+    expect(screen.getByText('Login', { selector: '.row__value' })).toBeInTheDocument();
+  });
+
+  it('explains what each Logo Button does in one line', async () => {
+    setup();
+    await openSetting('Customize', 'Logo Button');
+    expect(screen.getByText('Home or Settings turns the logo into that button and takes the entry out of the menu. Login shows who is signed in')).toBeInTheDocument();
   });
 
   it('shows Black, Dark and Light with a preview and applies the theme while browsing', async () => {
@@ -726,6 +760,18 @@ describe('SettingsPage', () => {
     expect(getSetting('loaderStyle')).toBe('ripple');
   });
 
+  it('closes a picker with a click outside it and puts back what was only being previewed', async () => {
+    setup();
+    await openSetting('Appearance', 'Loading Animation');
+    press(13);
+    press(40);
+    expect(getSetting('loaderStyle')).toBe('dots');
+    fireEvent.mouseDown(document.querySelector('.picker') as HTMLElement);
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(document.querySelector('.picker')).toBeNull();
+    expect(getSetting('loaderStyle')).toBe('ring');
+  });
+
   it('opens the homepage and sidebar editors and closes them again', async () => {
     setup();
     await openSetting('Customize', 'Customize Homepage');
@@ -756,6 +802,33 @@ describe('SettingsPage', () => {
     await openSetting('Customize', 'Customize Homepage');
     press(13);
     ['Featured', 'Gaming', 'Cheese', 'Following'].forEach((label) => expect(screen.getByText(label)).toBeInTheDocument());
+  });
+
+  it('lists Wild West, which Odysee hides by default, as hidden in the homepage editor and lets you show it', async () => {
+    mockFetch(() => ({ status: 'success', data: { en: { categories: {
+      PRIMARY_CONTENT: { label: 'Featured', channelIds: ['f1'], sortOrder: 2 },
+      GAMING: { label: 'Gaming', icon: 'Gaming', channelIds: ['g1'], sortOrder: 60 },
+      WILD_WEST: { label: 'Wild West', icon: 'WildWest', excludedChannelIds: ['x1'], sortOrder: 999 },
+      EXPLORABLE_CHANNEL: { label: 'Discover', sortOrder: 1 },
+    } } } }));
+    await act(async () => { await refreshHomepage(true); });
+    setup();
+    await openSetting('Customize', 'Customize Homepage');
+    press(13);
+    const entries = () => Array.from(document.querySelectorAll('.layoutRow')).map((row) => row.querySelector('.layoutRow__label')?.firstChild?.textContent);
+    expect(entries().slice(0, 5)).toEqual(['Following', 'Continue Watching', 'Featured', 'Gaming', 'Wild West']);
+    expect(screen.queryByText('Discover')).toBeNull();
+    const wild = () => Array.from(document.querySelectorAll('.layoutRow')).find((row) => row.textContent?.includes('Wild West')) as HTMLElement;
+    expect(wild().textContent).toContain('Hidden');
+    expect(wild().className).toContain('layoutRow--hidden');
+    for (let index = 0; index < 4; index++) press(40);
+    expect(document.querySelector('.layoutRow--active')).toBe(wild());
+    press(13);
+    expect(wild().textContent).toContain('Shown');
+    expect(JSON.parse(localStorage.getItem('layout_home') as string)).toEqual({ order: [], hidden: [], shown: ['WILD_WEST'] });
+    press(13);
+    expect(wild().textContent).toContain('Hidden');
+    expect(localStorage.getItem('layout_home')).toBeNull();
   });
 
   it('lets you pick the app language', async () => {

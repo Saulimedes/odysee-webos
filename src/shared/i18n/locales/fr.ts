@@ -199,7 +199,7 @@ export default {
   "Loading Animation": "Animation de chargement",
   "Shown whenever a page or the player is loading. The ring is the lightest on older TVs": "Affichée quand une page ou le lecteur charge. L'anneau est le plus léger sur les anciens téléviseurs",
   "Logo Button": "Bouton logo",
-  "The Odysee logo can be the button for Home or for Settings. It then replaces that entry in the menu, so it is never both": "Le logo Odysee peut servir de bouton pour Accueil ou pour Paramètres. Il remplace alors cette entrée du menu, ce n'est donc jamais les deux",
+  "Home or Settings turns the logo into that button and takes the entry out of the menu. Login shows who is signed in": "Accueil ou Paramètres font du logo ce bouton et retirent l'entrée du menu. Connexion montre qui est connecté",
   "Back Button": "Bouton retour",
   "Shows a back arrow at the top left of the player controls. The Back key of the remote works either way": "Affiche une flèche retour en haut à gauche des commandes du lecteur. La touche Retour de la télécommande fonctionne dans les deux cas",
   "Twin Arcs": "Deux arcs",

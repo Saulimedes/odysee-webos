@@ -29,6 +29,13 @@ describe('VideoMenu', () => {
     expect(entries()).toEqual(['Play', 'Add to Watch Later', 'Add to Favorites', 'Go to channel']);
   });
 
+  it('closes with a click outside it', () => {
+    const { onClose, onPlay } = setup();
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
   it('offers to remove a video from the lists it is in', () => {
     collections.set({ watchLater: [sample], favorites: [sample], history: [sample] });
     savePlaybackPosition(sample, 100, 600);

@@ -245,7 +245,7 @@ describe('App', () => {
     expect(await screen.findByPlaceholderText('Search Odysee...')).toBeInTheDocument();
   });
 
-  it('signs in from the login screen and signs out from settings', async () => {
+  it('signs in from the login screen, which Settings opens, and signs out from settings', async () => {
     mockFetch((url, init) => {
       if (url.includes('/content/v2/get')) return content;
       if (url.includes('/user/new')) return { success: true, data: { auth_token: 'anon' } };
@@ -261,10 +261,17 @@ describe('App', () => {
     render(<App />);
     await screen.findByText('Game 0');
     press(37);
+    expect(screen.queryByText('Login')).toBeNull();
     press(38);
     press(38);
     press(13);
-    await screen.findByText('Sign in to Odysee');
+    await screen.findByText('Settings', { selector: 'h1' });
+    for (let index = 0; index < 4; index++) press(40);
+    press(39);
+    await screen.findByText('Sign in to Odysee', { selector: '.row__label' });
+    press(13);
+    await screen.findByText('Sign in to Odysee', { selector: 'h1' });
+    expect(document.querySelector('.sidebar__item--selected')?.textContent).toBe('Settings');
     fireEvent.click(screen.getByText('Password'));
     fireEvent.change(screen.getByPlaceholderText('Email'), { target: { value: 'me@example.com' } });
     fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'pw' } });
@@ -277,12 +284,47 @@ describe('App', () => {
     for (let index = 0; index < 7; index++) press(40);
     press(13);
     await screen.findByText('Settings', { selector: 'h1' });
-    for (let index = 0; index < 4; index++) press(40);
-    press(39);
     await screen.findByText('me@example.com');
+    expect(document.querySelector('.row--active .row__label')?.textContent).toBe('me@example.com');
     press(13);
     await waitFor(() => expect(session.get().user).toBeNull());
     expect(await screen.findByText('Game 0')).toBeInTheDocument();
+  });
+});
+
+describe('login screen', () => {
+  const openLogin = async () => {
+    api();
+    await act(async () => { await refreshHomepage(true); });
+    render(<App />);
+    await screen.findByText('Game 0');
+    press(37);
+    press(38);
+    press(38);
+    press(13);
+    await screen.findByText('Settings', { selector: 'h1' });
+    for (let index = 0; index < 4; index++) press(40);
+    press(39);
+    await screen.findByText('Sign in to Odysee', { selector: '.row__label' });
+    press(13);
+    await screen.findByText('Sign in to Odysee', { selector: 'h1' });
+  };
+
+  it('is reached from Account in Settings and marks Settings in the menu, not an entry of its own', async () => {
+    await openLogin();
+    expect(screen.queryByText('Login')).toBeNull();
+    expect(document.querySelector('.sidebar__item--selected')?.textContent).toBe('Settings');
+    press(37);
+    expect(document.querySelector('.sidebar--open')).not.toBeNull();
+    expect(document.querySelector('.sidebar__item--active')?.textContent).toBe('Settings');
+  });
+
+  it('goes back to Settings on Back, where the sign in row is still selected', async () => {
+    await openLogin();
+    press(461);
+    expect(await screen.findByText('Settings', { selector: 'h1' })).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to Odysee', { selector: '.row__label' })).toBeInTheDocument();
+    expect(document.querySelector('.row--active .row__label')?.textContent).toBe('Sign in to Odysee');
   });
 });
 

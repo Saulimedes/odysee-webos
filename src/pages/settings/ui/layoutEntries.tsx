@@ -18,9 +18,9 @@ export function sidebarEntries(t: Translate): LayoutEntry[] {
   }));
 }
 
-function categoryEntry(category: Category, t: Translate): LayoutEntry {
+function categoryEntry(category: Category, t: Translate, hiddenByDefault?: boolean): LayoutEntry {
   const icon = categoryIcon({ label: category.label, icon: category.icon });
-  return { id: category.id, label: t(category.label), icon: icon ? <OdyseeIcon name={icon} size={ICON_SIZE} follow /> : <IconCategory size={ICON_SIZE} /> };
+  return { id: category.id, label: t(category.label), icon: icon ? <OdyseeIcon name={icon} size={ICON_SIZE} follow /> : <IconCategory size={ICON_SIZE} />, hiddenByDefault };
 }
 
 export function homeEntries(homepage: Homepage | null, t: Translate): LayoutEntry[] {
@@ -29,5 +29,6 @@ export function homeEntries(homepage: Homepage | null, t: Translate): LayoutEntr
     { id: HOME_ROWS.following, label: t('Following'), icon: <IconHeart size={ICON_SIZE} />, note: t('Signed in only') },
     { id: HOME_ROWS.continue, label: t('Continue Watching'), icon: <IconPlayerPlay size={ICON_SIZE} />, note: t('Shows once you have watched something') },
     ...categories.map((category) => categoryEntry(category, t)),
+    ...(homepage?.open ?? []).map((category) => categoryEntry(category, t, true)),
   ];
 }

@@ -20,6 +20,7 @@ const content = {
     PRIMARY_CONTENT: category('Featured', 'Featured', 2),
     GAMING: category('Gaming', 'Gaming', 60),
     TECHNOLOGY: category('Tech', 'Speaker', 80),
+    WILD_WEST: { label: 'Wild West', icon: 'WildWest', excludedChannelIds: ['channel-2'], sortOrder: 999, pageSize: 6, daysOfContent: 90 },
   } } },
 };
 

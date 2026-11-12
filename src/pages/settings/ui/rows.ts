@@ -9,7 +9,7 @@ import type { LayoutKind } from '@/features/customize-layout';
 export type ChoiceVariant = 'swatch' | 'font' | 'theme' | 'loader';
 
 export type SettingsRow =
-  | { id: string; kind: 'account' }
+  | { id: string; kind: 'account'; section: string }
   | { id: string; Icon: Icon; kind: 'toggle'; key: 'autoplay' | 'resume' | 'nsfw' | 'statsForNerds' | 'osdBackButton'; label: string; hint: string; section?: string; requiresLogin?: boolean }
   | { id: string; Icon: Icon; kind: 'choice'; key: SettingKey; label: string; hint: string; section?: string; options: PickerOption[]; variant?: ChoiceVariant }
   | { id: string; Icon: Icon; kind: 'editor'; editor: LayoutKind; label: string; hint: string; section?: string }
@@ -45,7 +45,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     rows: [
       { id: 'customizeHome', Icon: IconHome, kind: 'editor', editor: 'home', label: 'Customize Homepage', hint: 'Choose which rows Home shows and in which order' },
       { id: 'customizeSidebar', Icon: IconLayoutSidebar, kind: 'editor', editor: 'sidebar', label: 'Customize Sidebar', hint: 'Choose which menu entries show and in which order' },
-      { id: 'logoButton', Icon: IconCircleDot, kind: 'choice', key: 'logoButton', label: 'Logo Button', hint: 'The Odysee logo can be the button for Home or for Settings. It then replaces that entry in the menu, so it is never both', options: LOGO_BUTTONS },
+      { id: 'logoButton', Icon: IconCircleDot, kind: 'choice', key: 'logoButton', label: 'Logo Button', hint: 'Home or Settings turns the logo into that button and takes the entry out of the menu. Login shows who is signed in', options: LOGO_BUTTONS },
       { id: 'iconVariant', Icon: IconIcons, kind: 'choice', key: 'iconVariant', label: 'Menu Icon Style', hint: 'Dynamic fills the icon of the entry you are on or focus', options: ICON_VARIANTS },
       { id: 'iconScale', Icon: IconZoomIn, kind: 'choice', key: 'iconScale', label: 'Menu Icon Size', hint: 'Scales the icons of the sidebar', options: ICON_SCALES },
     ],
@@ -77,7 +77,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     label: 'Account',
     Icon: IconUser,
     rows: [
-      { id: 'account', kind: 'account' },
+      { id: 'account', kind: 'account', section: 'Login' },
       { id: 'nsfw', Icon: IconShieldHalf, kind: 'toggle', key: 'nsfw', section: 'Content', label: 'Show mature content', hint: 'Include mature videos in feeds and search', requiresLogin: true },
       { id: 'clear', Icon: IconTrash, kind: 'clear', section: 'Storage' },
     ],

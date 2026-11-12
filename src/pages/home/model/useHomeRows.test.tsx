@@ -145,3 +145,22 @@ describe('useHomeRows request order', () => {
     expect(asked.filter((channel) => channel === 'c1')).toHaveLength(1);
   });
 });
+
+describe('useHomeRows loading around the focus', () => {
+  it('also loads the rows above the one that gets the focus, so that going up from the end finds them ready', async () => {
+    const { result } = renderHook(() => useHomeRows());
+    await waitFor(() => expect(result.current.rows.filter((row) => row.status === 'ready')).toHaveLength(4));
+    expect(byId(result.current.rows, 'D')?.status).toBe('idle');
+    act(() => { result.current.ensure('E'); });
+    await waitFor(() => expect(byId(result.current.rows, 'E')?.status).toBe('ready'));
+    await waitFor(() => expect(byId(result.current.rows, 'D')?.status).toBe('ready'));
+  });
+
+  it('loads nothing above the first row', async () => {
+    const { result } = renderHook(() => useHomeRows());
+    await waitFor(() => expect(result.current.rows.filter((row) => row.status === 'ready')).toHaveLength(4));
+    act(() => { result.current.ensure('PRIMARY_CONTENT'); });
+    expect(byId(result.current.rows, 'D')?.status).toBe('idle');
+    expect(byId(result.current.rows, 'E')?.status).toBe('idle');
+  });
+});

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '@/shared/i18n';
 import { peekClaims, queryClaims, type FeedQuery, type Video } from '@/entities/video';
 import { categoryFeed } from '@/features/browse-feeds';
-import { categoryIcon, useHomepage, useHomepageFailed, type Category } from '@/entities/category';
+import { categoryIcon, useHomepage, useHomepageFailed, type Category, type Homepage } from '@/entities/category';
 import { useSession } from '@/entities/session';
 import { HOME_ROWS, useLayout, visibleItems } from '@/features/customize-layout';
 import { getFollowingVideos, peekFollowingVideos } from '@/features/following';
@@ -11,19 +11,23 @@ import type { VideoRow } from '@/widgets/video-rows';
 
 interface RowState { videos: Video[]; status: VideoRow['status']; page: number; hasMore: boolean; stale: boolean }
 
-interface Descriptor { id: string; title: string; icon?: string | null; pageSize: number; feed?: (page: number) => FeedQuery }
+interface Descriptor { id: string; title: string; icon?: string | null; pageSize: number; feed?: (page: number) => FeedQuery; hiddenByDefault?: boolean }
 
 const EMPTY_ROW: RowState = { videos: [], status: 'idle', page: 0, hasMore: false, stale: false };
 const PREFETCH_AHEAD = 3;
+const PREFETCH_BEHIND = 2;
 const MAX_ROW_ITEMS = 48;
 const NO_VIDEOS: Video[] = [];
 
-function describe(featured: Category | null, categories: Category[], loggedIn: boolean): Descriptor[] {
+function describe(homepage: Homepage | null, loggedIn: boolean): Descriptor[] {
   const list: Descriptor[] = [];
   if (loggedIn) list.push({ id: HOME_ROWS.following, title: 'Following', icon: null, pageSize: 20 });
-  [featured, ...categories].forEach((category) => {
-    if (category) list.push({ id: category.id, title: category.label, icon: categoryIcon(category), pageSize: category.pageSize, feed: (page) => categoryFeed(category, page) });
-  });
+  const add = (category: Category | null | undefined, hiddenByDefault?: boolean) => {
+    if (category) list.push({ id: category.id, title: category.label, icon: categoryIcon(category), pageSize: category.pageSize, feed: (page) => categoryFeed(category, page), hiddenByDefault });
+  };
+  add(homepage?.featured);
+  homepage?.categories.forEach((category) => add(category));
+  homepage?.open?.forEach((category) => add(category, true));
   return list;
 }
 
@@ -41,7 +45,7 @@ export function useHomeRows() {
   const layout = useLayout('home');
   const loggedIn = Boolean(user?.primary_email);
   const descriptors = useMemo(
-    () => visibleItems(describe(homepage?.featured ?? null, homepage?.categories ?? [], loggedIn), layout),
+    () => visibleItems(describe(homepage, loggedIn), layout),
     [homepage, loggedIn, layout],
   );
   const descriptorsRef = useRef(descriptors);
@@ -112,11 +116,13 @@ export function useHomeRows() {
   const ensure = useCallback((rowId: string) => {
     const list = descriptorsRef.current;
     const at = Math.max(0, list.findIndex((descriptor) => descriptor.id === rowId));
+    const from = Math.max(0, at - PREFETCH_BEHIND);
     const onScreen: Array<Promise<void>> = [];
     const later: Descriptor[] = [];
-    list.slice(at, at + PREFETCH_AHEAD + 1).forEach((descriptor, offset) => {
+    list.slice(from, at + PREFETCH_AHEAD + 1).forEach((descriptor, position) => {
       if (!wanted(descriptor)) return;
-      if (offset > 1 || dataRef.current[descriptor.id]?.videos.length) later.push(descriptor);
+      const offset = from + position - at;
+      if (offset < 0 || offset > 1 || dataRef.current[descriptor.id]?.videos.length) later.push(descriptor);
       else onScreen.push(load(descriptor, 1, false));
     });
     const start = () => later.forEach((descriptor) => { if (wanted(descriptor)) void load(descriptor, 1, true); });

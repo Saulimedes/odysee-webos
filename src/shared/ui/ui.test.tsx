@@ -270,13 +270,61 @@ describe('OptionPicker as a popover', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a click next to it when nobody asked to hear about it, and in the centered picker', () => {
+  it('goes back like Back when nobody asked to hear about the click next to it', () => {
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options(3)} value="c1" placement="popover" onClose={onClose} />);
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(onClose).toHaveBeenCalledWith(false, 'c1');
+  });
+});
+
+describe('OptionPicker click outside', () => {
+  const options = [{ code: 'a', name: 'Alpha' }, { code: 'b', name: 'Beta' }, { code: 'c', name: 'Gamma' }];
+  const backdrop = () => document.querySelector('.picker') as HTMLElement;
+  const outside = () => { fireEvent.mouseDown(backdrop()); fireEvent.mouseUp(backdrop()); fireEvent.click(backdrop()); };
+
+  it('closes the centered picker like Back, with the entry it was on', () => {
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options} value="b" onClose={onClose} />);
+    outside();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledWith(false, 'b');
+  });
+
+  it('does not close for a click on the panel, its title or an entry that is not picked by it', () => {
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options} value="a" onClose={onClose} />);
+    fireEvent.mouseDown(screen.getByText('Pick'));
+    fireEvent.click(screen.getByText('Pick'));
+    fireEvent.click(document.querySelector('.picker__panel') as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('leaves it to the one who asked to hear about it to close', () => {
+    const onClose = vi.fn();
     const onDismiss = vi.fn();
-    const { rerender } = render(<OptionPicker title="Pick" options={options(3)} value="c0" placement="popover" onClose={vi.fn()} />);
-    fireEvent.click(document.querySelector('.picker') as HTMLElement);
-    rerender(<OptionPicker title="Pick" options={options(3)} value="c0" onDismiss={onDismiss} onClose={vi.fn()} />);
-    fireEvent.click(document.querySelector('.picker') as HTMLElement);
-    expect(onDismiss).not.toHaveBeenCalled();
+    render(<OptionPicker title="Pick" options={options} value="a" onDismiss={onDismiss} onClose={onClose} />);
+    outside();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close when the press started on the panel and was let go next to it, and then works again', () => {
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options} value="a" onClose={onClose} />);
+    fireEvent.mouseDown(screen.getByText('Beta'));
+    fireEvent.mouseUp(backdrop());
+    fireEvent.click(backdrop());
+    expect(onClose).not.toHaveBeenCalled();
+    outside();
+    expect(onClose).toHaveBeenCalledWith(false, 'a');
+  });
+
+  it('also works for a click without a press before it', () => {
+    const onClose = vi.fn();
+    render(<OptionPicker title="Pick" options={options} value="a" onClose={onClose} />);
+    fireEvent.click(backdrop());
+    expect(onClose).toHaveBeenCalledWith(false, 'a');
   });
 });
 

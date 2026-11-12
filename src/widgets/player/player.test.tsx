@@ -415,6 +415,101 @@ describe('Player playback', () => {
     expect(loadCalls()).toBe(closed);
   });
 
+  describe('mouse clicks on the picture', () => {
+    const click = (element: Element) => { fireEvent.mouseDown(element); fireEvent.mouseUp(element); fireEvent.click(element); };
+    const pauses = () => vi.mocked(HTMLMediaElement.prototype.pause).mock.calls.length;
+    const plays = () => vi.mocked(HTMLMediaElement.prototype.play).mock.calls.length;
+
+    it('pause a playing video and play it again with the next click, like the play button', () => {
+      setup();
+      setMedia(media(), { currentTime: 30, duration: 600, paused: false });
+      fireEvent(media(), new Event('playing'));
+      const before = pauses();
+      click(media());
+      expect(pauses()).toBe(before + 1);
+      setMedia(media(), { paused: true });
+      fireEvent(media(), new Event('pause'));
+      const started = plays();
+      click(media());
+      expect(plays()).toBe(started + 1);
+    });
+
+    it('also count on the empty part of the controls, which cover the picture while they are shown', () => {
+      setup();
+      setMedia(media(), { paused: false });
+      const before = pauses();
+      click(document.querySelector('.player__controls') as HTMLElement);
+      click(document.querySelector('.player__top') as HTMLElement);
+      expect(pauses()).toBe(before + 2);
+    });
+
+    it('leave the buttons and the timeline to themselves', () => {
+      setup();
+      setMedia(media(), { paused: false });
+      const before = pauses();
+      click(document.querySelector('.player__group--left .pbtn:nth-child(2)') as HTMLElement);
+      click(document.querySelector('.timeline__time') as HTMLElement);
+      expect(pauses()).toBe(before);
+    });
+
+    it('do nothing when a drag on the timeline is let go over the picture, and work again after it', () => {
+      setup();
+      setMedia(media(), { paused: false });
+      const before = pauses();
+      fireEvent.mouseDown(document.querySelector('.timeline__track') as HTMLElement);
+      fireEvent.mouseUp(media());
+      fireEvent.click(media());
+      expect(pauses()).toBe(before);
+      click(media());
+      expect(pauses()).toBe(before + 1);
+    });
+
+    it('only close the menu when they are outside it', () => {
+      setup();
+      setMedia(media(), { paused: false });
+      openMenu();
+      const before = pauses();
+      click(document.querySelector('.picker') as HTMLElement);
+      expect(document.querySelector('.picker')).toBeNull();
+      expect(pauses()).toBe(before);
+    });
+
+    it('ask again when an error is shown, like OK', () => {
+      setup();
+      fail();
+      expect(document.querySelector('.player__error')).not.toBeNull();
+      click(document.querySelector('.player__error') as HTMLElement);
+      expect(document.querySelector('.player__error')).toBeNull();
+    });
+
+    it('are ignored while it waits to try again', () => {
+      vi.useFakeTimers();
+      setup();
+      refuse();
+      const loads = loadCalls();
+      const before = pauses();
+      const started = plays();
+      click(media());
+      expect(loadCalls()).toBe(loads);
+      expect(pauses()).toBe(before);
+      expect(plays()).toBe(started);
+    });
+
+    it('are ignored while the countdown to the next video runs', async () => {
+      const queue = [sample, video('q2') as Video];
+      setup({ queue });
+      await settle();
+      vi.useFakeTimers();
+      end();
+      expect(screen.getByText('Up next')).toBeInTheDocument();
+      setMedia(media(), { paused: false });
+      const before = pauses();
+      click(media());
+      expect(pauses()).toBe(before);
+      expect(screen.getByText('Up next')).toBeInTheDocument();
+    });
+  });
+
   it('shows what the player says when a file cannot be played at all, instead of saying the server is busy', () => {
     setup();
     Object.defineProperty(media(), 'error', { value: { code: 4, message: 'DEMUXER_ERROR_COULD_NOT_OPEN: FFmpegDemuxer: open context failed' }, configurable: true });

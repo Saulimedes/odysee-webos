@@ -6,7 +6,7 @@ export { formatDuration, formatRelativeTime } from './format';
 export { useRemembered } from './remember';
 export { NavContext, useNav } from './nav';
 export type { NavApi } from './nav';
-export { useDebounced } from './hooks';
+export { useBackdropClick, useDebounced } from './hooks';
 export { createStore } from './store';
 export { stillThumbUrl, thumbUrl } from './image';
 export { useGridNav } from './gridNav';

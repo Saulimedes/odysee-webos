@@ -23,7 +23,7 @@ export function Home() {
   }, { enabled: !hasVideos && !loading });
 
   if (allHidden) return <EmptyState icon={<IconEyeOff size={64} />} title={t('All home rows are hidden')} hint={t('Show them again in Settings, Customize Homepage')} />;
-  if (hasVideos) return <VideoRows stateKey="home" rows={rows} onActiveRow={ensure} onLoadMore={loadMore} />;
+  if (hasVideos) return <VideoRows stateKey="home" rows={rows} onActiveRow={ensure} onLoadMore={loadMore} wrap />;
   if (loading) return <div className="center"><Spinner /></div>;
   return <EmptyState icon={<IconWifiOff size={64} />} title={failed ? t('Could not reach Odysee') : t('Nothing to show yet')} hint={t('Check your connection, then press OK to try again')} />;
 }

@@ -37,6 +37,7 @@ export function FilterMenu({ filters, onChange, onClose }: Props) {
         title={t('Filters')}
         options={options}
         value={last}
+        onDismiss={onClose}
         onClose={(confirmed, code) => {
           if (!confirmed) onClose();
           else if (code === 'reset') { onChange(DEFAULT_FILTERS); onClose(); }
@@ -53,6 +54,7 @@ export function FilterMenu({ filters, onChange, onClose }: Props) {
       title={field.title}
       options={field.options}
       value={filters[screen]}
+      onDismiss={onClose}
       onClose={(confirmed, code) => {
         if (!confirmed) setScreen('main');
         else { onChange({ ...filters, [screen]: String(code) }); onClose(); }

@@ -13,7 +13,7 @@ const Player = lazy(() => loadPlayer().then((module) => ({ default: module.Playe
 const VideoMenu = lazy(() => import('@/widgets/video-menu').then((module) => ({ default: module.VideoMenu })));
 const PLAYER_PREFETCH_MS = 3000;
 
-const BACK_TARGET: Record<string, string> = { continue: 'library', history: 'library', 'watch-later': 'library', favorites: 'library' };
+const BACK_TARGET: Record<string, string> = { continue: 'library', history: 'library', 'watch-later': 'library', favorites: 'library', login: 'settings' };
 const BACK_PRIORITY = 1;
 const START_TIMEOUT_MS = 8000;
 

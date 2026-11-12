@@ -199,7 +199,7 @@ export default {
   "Loading Animation": "Animace načítání",
   "Shown whenever a page or the player is loading. The ring is the lightest on older TVs": "Zobrazuje se při načítání stránky nebo přehrávače. Kroužek je nejlehčí na starších televizorech",
   "Logo Button": "Tlačítko loga",
-  "The Odysee logo can be the button for Home or for Settings. It then replaces that entry in the menu, so it is never both": "Logo Odysee může být tlačítkem pro Domů nebo pro Nastavení. Nahradí pak tuto položku v nabídce, takže nikdy není obojí",
+  "Home or Settings turns the logo into that button and takes the entry out of the menu. Login shows who is signed in": "Domů nebo Nastavení promění logo v toto tlačítko a odebere položku z nabídky. Přihlášení ukazuje, kdo je přihlášen",
   "Back Button": "Tlačítko zpět",
   "Shows a back arrow at the top left of the player controls. The Back key of the remote works either way": "Zobrazí šipku zpět vlevo nahoře v ovládání přehrávače. Tlačítko Zpět na ovladači funguje v obou případech",
   "Twin Arcs": "Dva oblouky",

@@ -149,6 +149,7 @@ export const LOGO_BUTTONS = [
   { code: 'off', name: 'Off' },
   { code: 'home', name: 'Home' },
   { code: 'settings', name: 'Settings' },
+  { code: 'login', name: 'Login' },
 ];
 
 export const ICON_VARIANTS = [

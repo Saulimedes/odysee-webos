@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cssRules, flush, video } from '../../tests/helpers';
 import { WheelNavigation, hoverOver, renderWithNav, setViewport, tapOk } from '../../tests/render';
 import type { Video } from '@/entities/video';
@@ -35,23 +35,38 @@ describe('Sidebar', () => {
     return props;
   };
 
-  it('shows the login entry only for guests', () => {
+  it('leaves the account entries and any login entry out for guests', () => {
     setup(false);
-    expect(screen.getByText('Login')).toBeInTheDocument();
+    expect(screen.queryByText('Login')).toBeNull();
+    expect(screen.queryByText('Sign In')).toBeNull();
     expect(screen.queryByText('Following')).toBeNull();
     expect(screen.getByText('Odysee')).toBeInTheDocument();
+    expect(Array.from(document.querySelectorAll('.sidebar__label')).map((node) => node.textContent)).toEqual(['Odysee', 'Search', 'Home', 'Discover', 'Featured', 'Categories', 'Library', 'Settings']);
   });
 
-  it('shows account entries and the channel for signed in users', () => {
+  it('shows account entries for signed in users, and keeps the plain logo while the logo button is off', () => {
     session.set({ token: 't', user: { primary_email: 'a@b.c', profile_image: 'https://x/p.png', channel: { id: 'c', name: 'me', thumb: null } } });
     setup(false);
     expect(screen.queryByText('Login')).toBeNull();
     expect(screen.getByText('Following')).toBeInTheDocument();
     expect(screen.getByText('Playlists')).toBeInTheDocument();
+    expect(screen.queryByText('@me')).toBeNull();
+    expect(document.querySelector('.sidebar__brand')?.textContent).toBe('Odysee');
+    expect(document.querySelector('.sidebar__brand img')?.getAttribute('src')).toBe('icon.png');
+    expect(document.querySelector('.sidebar__brand .avatar')).toBeNull();
+  });
+
+  it('shows the signed in user on top when the logo button is Login', () => {
+    setSetting('logoButton', 'login');
+    session.set({ token: 't', user: { primary_email: 'a@b.c', profile_image: 'https://x/p.png', channel: { id: 'c', name: 'me', thumb: null } } });
+    setup(false);
     expect(screen.getByText('@me')).toBeInTheDocument();
+    expect(document.querySelector('.sidebar__brand .avatar')).not.toBeNull();
+    expect(document.querySelector('.sidebar__brand img[src="icon.png"]')).toBeNull();
   });
 
   it('cuts the profile picture to the corner style and carries the squircle outline for Classic', () => {
+    setSetting('logoButton', 'login');
     session.set({ token: 't', user: { primary_email: 'a@b.c', profile_image: 'https://x/p.png', channel: { id: 'c', name: 'me', thumb: null } } });
     setup(false);
     expect(document.querySelector('.sidebar__brand .avatar')).toHaveClass('avatar--corners');
@@ -61,10 +76,12 @@ describe('Sidebar', () => {
     expect(document.querySelectorAll('#squircle')).toHaveLength(1);
   });
 
-  it('falls back to the app name for users without a channel', () => {
+  it('falls back to the app name and the logo for users without a channel or a picture', () => {
+    setSetting('logoButton', 'login');
     session.set({ token: 't', user: { primary_email: 'a@b.c' } });
     setup(false);
     expect(screen.getByText('Odysee')).toBeInTheDocument();
+    expect(document.querySelector('.sidebar__brand img')?.getAttribute('src')).toBe('icon.png');
   });
 
   it('navigates with the remote while focused', () => {
@@ -72,9 +89,12 @@ describe('Sidebar', () => {
     press(40); press(40);
     press(13);
     expect(props.onSelect).toHaveBeenLastCalledWith('featured');
-    press(38); press(38); press(38); press(38);
+    press(38); press(38); press(38);
     press(13);
-    expect(props.onSelect).toHaveBeenLastCalledWith('login');
+    expect(props.onSelect).toHaveBeenLastCalledWith('search');
+    press(38);
+    press(13);
+    expect(props.onSelect).toHaveBeenLastCalledWith('settings');
     press(39);
     expect(props.onLeave).toHaveBeenCalled();
     expect(fireEvent.keyDown(window, { keyCode: 65 })).toBe(true);
@@ -121,7 +141,7 @@ describe('Sidebar', () => {
     const props = { selected: 'channel', focused: true, onSelect: vi.fn(), onLeave: vi.fn(), onFocus: vi.fn() };
     render(<Sidebar {...props} />);
     press(13);
-    expect(props.onSelect).toHaveBeenCalledWith('login');
+    expect(props.onSelect).toHaveBeenCalledWith('search');
   });
 });
 
@@ -175,23 +195,21 @@ describe('Sidebar customization', () => {
     toggleEntry('sidebar', 'discover');
     toggleEntry('sidebar', 'featured');
     setup();
-    expect(labels()).toEqual(['Login', 'Search', 'Home', 'Categories', 'Library', 'Settings']);
+    expect(labels()).toEqual(['Search', 'Home', 'Categories', 'Library', 'Settings']);
   });
 
   it('shows the entries in the order the user picked', () => {
     moveEntry('sidebar', ['search', 'home', 'discover', 'featured', 'categories', 'playlists', 'following', 'library', 'settings'], 'home', -1);
     setup();
-    expect(labels()).toEqual(['Login', 'Home', 'Search', 'Discover', 'Featured', 'Categories', 'Library', 'Settings']);
+    expect(labels()).toEqual(['Home', 'Search', 'Discover', 'Featured', 'Categories', 'Library', 'Settings']);
     press(13);
     expect(document.querySelector('.sidebar__item--active')?.textContent).toBe('Home');
   });
 
-  it('never hides Settings or Login', () => {
+  it('never hides Settings', () => {
     toggleEntry('sidebar', 'settings');
-    toggleEntry('sidebar', 'login');
     setup();
     expect(labels()).toContain('Settings');
-    expect(labels()[0]).toBe('Login');
   });
 
   it('keeps hidden account entries hidden and shows them in order once signed in', () => {
@@ -253,8 +271,7 @@ describe('Sidebar customization', () => {
       const props = setup(true);
       const brand = document.querySelector('.sidebar__brand') as HTMLElement;
       expect(brand.className).toContain('sidebar__brand--entry');
-      expect(brand.textContent).toBe('Home');
-      expect(labels()).toEqual(['Login', 'Search', 'Discover', 'Featured', 'Categories', 'Library', 'Settings']);
+      expect(labels()).toEqual(['Search', 'Discover', 'Featured', 'Categories', 'Library', 'Settings']);
       fireEvent.click(brand);
       expect(props.onSelect).toHaveBeenLastCalledWith('home');
     });
@@ -262,7 +279,6 @@ describe('Sidebar customization', () => {
     it('takes over Settings and leaves nothing at the bottom', () => {
       setSetting('logoButton', 'settings');
       const props = setup(true);
-      expect(document.querySelector('.sidebar__brand')?.textContent).toBe('Settings');
       expect(labels()).not.toContain('Settings');
       expect(document.querySelector('.sidebar__group--bottom')).toBeNull();
       fireEvent.click(document.querySelector('.sidebar__brand') as HTMLElement);
@@ -272,14 +288,99 @@ describe('Sidebar customization', () => {
     it('is the first stop for the remote and shows the focus', () => {
       setSetting('logoButton', 'home');
       const props = setup(true);
-      for (let index = 0; index < 8; index++) press(38);
+      for (let index = 0; index < 7; index++) press(38);
       expect(document.querySelector('.sidebar__brand--active')).not.toBeNull();
       press(13);
       expect(props.onSelect).toHaveBeenLastCalledWith('home');
       press(40);
       expect(document.querySelector('.sidebar__brand--active')).toBeNull();
       press(13);
-      expect(props.onSelect).toHaveBeenLastCalledWith('login');
+      expect(props.onSelect).toHaveBeenLastCalledWith('search');
+    });
+
+    it.each(['home', 'settings'])('keeps the name of the logo when it is the button for %s, instead of naming that entry', (entry) => {
+      setSetting('logoButton', entry);
+      setup(true);
+      const brand = document.querySelector('.sidebar__brand') as HTMLElement;
+      expect(brand.className).toContain('sidebar__brand--entry');
+      expect(brand.textContent).toBe('Odysee');
+      expect(brand.querySelector('.sidebar__brandName')?.textContent).toBe('Odysee');
+    });
+
+    it.each([['off', 'Odysee'], ['home', 'Odysee'], ['settings', 'Odysee'], ['login', '@me']])('names the logo %s after the signed in channel only for Login', (entry, name) => {
+      setSetting('logoButton', entry);
+      session.set({ token: 't', user: { primary_email: 'a@b.c', profile_image: 'https://x/p.png', channel: { id: 'c', name: 'me', thumb: null } } });
+      setup(false);
+      expect(document.querySelector('.sidebar__brand')?.textContent).toBe(name);
+    });
+
+    describe('Login', () => {
+      const guest = () => {
+        setSetting('logoButton', 'login');
+        return setup(true);
+      };
+      const signedIn = () => session.set({ token: 't', user: { primary_email: 'a@b.c', profile_image: 'https://x/p.png', channel: { id: 'c', name: 'me', thumb: null } } });
+
+      it('is the button for the login screen while nobody is signed in, and leaves the menu as it is', () => {
+        const props = guest();
+        const brand = document.querySelector('.sidebar__brand') as HTMLElement;
+        expect(brand.className).toContain('sidebar__brand--entry');
+        expect(brand.textContent).toBe('Odysee');
+        expect(brand.querySelector('img')?.getAttribute('src')).toBe('icon.png');
+        expect(labels()).toEqual(['Search', 'Home', 'Discover', 'Featured', 'Categories', 'Library', 'Settings']);
+        fireEvent.click(brand);
+        expect(props.onSelect).toHaveBeenLastCalledWith('login');
+      });
+
+      it('is the first stop of the remote and opens the login screen with OK', () => {
+        const props = guest();
+        press(38);
+        expect(document.querySelector('.sidebar__item--active')?.textContent).toBe('Search');
+        press(38);
+        expect(document.querySelector('.sidebar__brand--active')).not.toBeNull();
+        press(13);
+        expect(props.onSelect).toHaveBeenLastCalledWith('login');
+        press(40);
+        expect(document.querySelector('.sidebar__brand--active')).toBeNull();
+        press(13);
+        expect(props.onSelect).toHaveBeenLastCalledWith('search');
+      });
+
+      it('is marked while the login screen is open, and starts the remote on it', () => {
+        setSetting('logoButton', 'login');
+        render(<Sidebar selected="login" focused onSelect={vi.fn()} onLeave={vi.fn()} onFocus={vi.fn()} />);
+        expect(document.querySelector('.sidebar__brand--selected')).not.toBeNull();
+        expect(document.querySelector('.sidebar__brand--active')).not.toBeNull();
+        expect(document.querySelector('.sidebar__item--selected')).toBeNull();
+      });
+
+      it('shows the user and is neither a button nor a stop for the remote once someone is signed in', () => {
+        signedIn();
+        const props = guest();
+        const brand = document.querySelector('.sidebar__brand') as HTMLElement;
+        expect(brand.className).toBe('sidebar__brand');
+        expect(brand.textContent).toBe('@me');
+        fireEvent.click(brand);
+        expect(props.onSelect).not.toHaveBeenCalled();
+        for (let index = 0; index < 20; index++) press(38);
+        expect(document.querySelector('.sidebar__brand--active')).toBeNull();
+        expect(labels()).toContain('Home');
+      });
+
+      it('turns into the button again when the user signs out', () => {
+        signedIn();
+        guest();
+        expect(document.querySelector('.sidebar__brand--entry')).toBeNull();
+        act(() => { session.set({ token: null, user: null }); });
+        expect(document.querySelector('.sidebar__brand--entry')).not.toBeNull();
+        expect(document.querySelector('.sidebar__brand')?.textContent).toBe('Odysee');
+      });
+    });
+
+    it('marks Settings in the menu while the login screen is open, unless the logo is the login button', () => {
+      render(<Sidebar selected="login" focused={false} onSelect={vi.fn()} onLeave={vi.fn()} onFocus={vi.fn()} />);
+      expect(document.querySelector('.sidebar__item--selected')?.textContent).toBe('Settings');
+      expect(document.querySelector('.sidebar__brand--selected')).toBeNull();
     });
 
     it('starts on the logo when the current screen is the one it stands for', () => {
@@ -306,8 +407,8 @@ describe('Sidebar customization', () => {
 
     setSetting('iconVariant', 'filled');
     const filled = render(<Sidebar selected="home" focused={false} onSelect={vi.fn()} onLeave={vi.fn()} onFocus={vi.fn()} />);
-    expect(fills()).toBeGreaterThan(5);
-    expect(strokes()).toContain('2.8');
+    expect(fills()).toBe(7);
+    expect(strokes()).toEqual(Array(7).fill(null));
     filled.unmount();
 
     setSetting('iconVariant', 'dynamic');
@@ -651,8 +752,15 @@ describe('VideoRows', () => {
     tapOk();
     expect(nav.play).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'b0' }), expect.any(Array));
     press(40);
+    expect(document.querySelector('.videoRow--active .videoRow__title')?.textContent).toBe('Loading');
+    const played = (nav.play as ReturnType<typeof vi.fn>).mock.calls.length;
+    tapOk();
+    expect(nav.play).toHaveBeenCalledTimes(played);
     press(40);
+    expect(document.querySelector('.videoRow--active .videoRow__title')?.textContent).toBe('Loading');
     press(38);
+    press(38);
+    expect(document.querySelector('.videoRow--active .videoRow__title')?.textContent).toBe('First');
     press(37);
     press(37);
     expect(nav.focusSidebar).not.toHaveBeenCalled();
@@ -717,6 +825,146 @@ describe('VideoRows', () => {
     expect(title()).toBe('First');
     fireEvent.wheel(document.body, { deltaY: 100 });
     expect(title()).toBe('Second');
+  });
+
+  describe('at the ends', () => {
+    const three = (): VideoRow[] => [
+      { id: 'r1', title: 'First', videos: videos(8, 'a'), status: 'ready' },
+      { id: 'r2', title: 'Second', videos: videos(8, 'b'), status: 'ready' },
+      { id: 'r3', title: 'Third', videos: videos(8, 'c'), status: 'ready' },
+    ];
+    const title = () => document.querySelector('.videoRow--active .videoRow__title')?.textContent;
+    const later = (ms = 400) => act(() => { vi.setSystemTime(Date.now() + ms); });
+    const pressAfter = (keyCode: number, ms = 400) => { later(ms); press(keyCode); };
+
+    beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(1_000_000); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('jumps from the last row to the first when Down is pressed again, and from the first to the last on Up', () => {
+      renderWithNav(<VideoRows stateKey="vr-wrap1" rows={three()} wrap />);
+      press(40);
+      pressAfter(40);
+      expect(title()).toBe('Third');
+      pressAfter(40);
+      expect(title()).toBe('First');
+      pressAfter(38);
+      expect(title()).toBe('Third');
+      pressAfter(38);
+      expect(title()).toBe('Second');
+    });
+
+    it('keeps the column of the row it lands on', () => {
+      renderWithNav(<VideoRows stateKey="vr-wrap2" rows={three()} wrap />);
+      press(39); press(39);
+      pressAfter(38);
+      expect(title()).toBe('Third');
+      pressAfter(40);
+      expect(title()).toBe('First');
+      expect(document.querySelector('.card--active')).toHaveTextContent('Video a2');
+    });
+
+    it('stops at the end while the keys keep coming, as for a long scroll with the wheel', () => {
+      renderWithNav(<VideoRows stateKey="vr-wrap3" rows={three()} wrap />);
+      press(40); press(40);
+      for (let step = 0; step < 6; step++) pressAfter(40, 120);
+      expect(title()).toBe('Third');
+      pressAfter(40);
+      expect(title()).toBe('First');
+    });
+
+    it('stops at the top as well while the keys keep coming', () => {
+      renderWithNav(<VideoRows stateKey="vr-wrap4" rows={three()} wrap />);
+      for (let step = 0; step < 6; step++) pressAfter(38, 120);
+      expect(title()).toBe('First');
+      pressAfter(38);
+      expect(title()).toBe('Third');
+    });
+
+    it('does not wrap on a key that is held down', () => {
+      renderWithNav(<VideoRows stateKey="vr-wrap5" rows={three()} wrap />);
+      press(40); press(40);
+      later(600);
+      fireEvent.keyDown(window, { keyCode: 40, repeat: true });
+      expect(title()).toBe('Third');
+      pressAfter(40);
+      expect(title()).toBe('First');
+    });
+
+    it('wraps with the wheel after a pause', () => {
+      renderWithNav(<><WheelNavigation /><VideoRows stateKey="vr-wrap6" rows={three()} wrap /></>);
+      fireEvent.wheel(document.body, { deltaY: 100 });
+      later();
+      fireEvent.wheel(document.body, { deltaY: 100 });
+      later();
+      fireEvent.wheel(document.body, { deltaY: 100 });
+      expect(title()).toBe('First');
+      later();
+      fireEvent.wheel(document.body, { deltaY: -100 });
+      expect(title()).toBe('Third');
+    });
+
+    it('stays on the first and the last row without wrap, as the Library does', () => {
+      const onTopEdge = vi.fn();
+      renderWithNav(<VideoRows stateKey="vr-wrap7" rows={three()} onTopEdge={onTopEdge} />);
+      press(40);
+      pressAfter(40);
+      pressAfter(40);
+      expect(title()).toBe('Third');
+      pressAfter(40);
+      expect(title()).toBe('Third');
+      press(38); pressAfter(38);
+      expect(title()).toBe('First');
+      pressAfter(38);
+      expect(title()).toBe('First');
+      expect(onTopEdge).toHaveBeenCalledTimes(1);
+    });
+
+    it('has nowhere to go with a single row', () => {
+      renderWithNav(<VideoRows stateKey="vr-wrap8" rows={three().slice(0, 1)} wrap />);
+      pressAfter(40);
+      pressAfter(38);
+      expect(title()).toBe('First');
+    });
+
+    it('wraps round instead of reporting the top edge when both are given', () => {
+      const onTopEdge = vi.fn();
+      renderWithNav(<VideoRows stateKey="vr-wrap9" rows={three()} wrap onTopEdge={onTopEdge} />);
+      pressAfter(38);
+      expect(title()).toBe('Third');
+      expect(onTopEdge).not.toHaveBeenCalled();
+    });
+
+    it('goes to the last row at once, also when it has not been loaded yet, and walks back up through rows that are still loading', () => {
+      const pending = (): VideoRow[] => [
+        ...three().slice(0, 2),
+        { id: 'r3', title: 'Third', videos: [], status: 'idle' },
+        { id: 'r4', title: 'Fourth', videos: [], status: 'idle' },
+      ];
+      const onActiveRow = vi.fn();
+      renderWithNav(<VideoRows stateKey="vr-wrap10" rows={pending()} onActiveRow={onActiveRow} wrap />);
+      pressAfter(38);
+      expect(title()).toBe('Fourth');
+      expect(onActiveRow).toHaveBeenLastCalledWith('r4');
+      pressAfter(38);
+      expect(title()).toBe('Third');
+      expect(onActiveRow).toHaveBeenLastCalledWith('r3');
+      pressAfter(38);
+      expect(title()).toBe('Second');
+    });
+
+    it('stays near its place when the row it is on turns out to be empty and goes', () => {
+      const rows = (last: VideoRow['status']): VideoRow[] => [
+        ...three().slice(0, 2),
+        { id: 'r3', title: 'Third', videos: [], status: last },
+        { id: 'r4', title: 'Fourth', videos: videos(4, 'd'), status: 'ready' },
+      ];
+      const { rerenderWithNav } = renderWithNav(<VideoRows stateKey="vr-wrap11" rows={rows('loading')} />);
+      press(40);
+      pressAfter(40);
+      expect(title()).toBe('Third');
+      rerenderWithNav(<VideoRows stateKey="vr-wrap11" rows={rows('ready')} />);
+      expect(title()).toBe('Fourth');
+    });
   });
 
   it('points at the card under the cursor in any row on the screen, without scrolling', () => {

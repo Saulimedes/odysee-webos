@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { KEY } from '@/shared/config';
 import { LOADER_MARKUP } from '@/shared/branding';
 import { useTranslation } from '@/shared/i18n';
-import { PRIORITY, cycle, isEnterHeld, pointerMoved, useKeys } from '@/shared/lib';
+import { PRIORITY, cycle, isEnterHeld, pointerMoved, useBackdropClick, useKeys } from '@/shared/lib';
 import { VirtualGrid } from './VirtualGrid';
 
 const ITEM_HEIGHT = 84;
@@ -41,6 +41,7 @@ export function OptionPicker({ title, options, value, variant, placement = 'cent
   const popover = placement === 'popover';
   const itemHeight = popover ? POPOVER_ITEM_HEIGHT : ITEM_HEIGHT;
   const height = !popover ? ITEM_HEIGHT * VISIBLE : options.length <= POPOVER_VISIBLE ? options.length * itemHeight + GRID_PAD : POPOVER_VISIBLE * itemHeight;
+  const backdrop = useBackdropClick(() => (onDismiss ? onDismiss() : onClose(false, options[index].code)));
 
   useEffect(() => { onPreview?.(options[index].code); }, [index, options, onPreview]);
 
@@ -67,10 +68,7 @@ export function OptionPicker({ title, options, value, variant, placement = 'cent
   });
 
   return (
-    <div
-      className={`picker${popover ? ' picker--popover' : ''}`}
-      onClick={popover && onDismiss ? (event) => { if (event.target === event.currentTarget) onDismiss(); } : undefined}
-    >
+    <div className={`picker${popover ? ' picker--popover' : ''}`} {...backdrop}>
       <div className="picker__panel">
         <h2>{title}</h2>
         <VirtualGrid

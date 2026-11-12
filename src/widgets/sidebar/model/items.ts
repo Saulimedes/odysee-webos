@@ -1,6 +1,6 @@
 import {
   IconBulb, IconBulbFilled, IconCategory, IconCategoryFilled, IconFolder, IconFolderFilled, IconHeart, IconHeartFilled, IconHome, IconHomeFilled,
-  IconLogin, IconPlaylist, IconPlaylistFilled, IconSearch, IconSearchFilled, IconSettings, IconSettingsFilled, IconStar, IconStarFilled,
+  IconPlaylist, IconPlaylistFilled, IconSearch, IconSearchFilled, IconSettings, IconSettingsFilled, IconStar, IconStarFilled,
   type Icon,
 } from '@tabler/icons-react';
 
@@ -11,12 +11,10 @@ export interface SidebarItem {
   label: string;
   group: SidebarGroup;
   Icon: Icon;
-  Filled?: Icon;
+  Filled: Icon;
   account?: boolean;
   locked?: boolean;
 }
-
-export const LOGIN_ITEM: SidebarItem = { id: 'login', label: 'Login', group: 'main', Icon: IconLogin };
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'search', label: 'Search', group: 'main', Icon: IconSearch, Filled: IconSearchFilled },
@@ -30,7 +28,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'settings', label: 'Settings', group: 'bottom', Icon: IconSettings, Filled: IconSettingsFilled, locked: true },
 ];
 
-export const LOCKED_ITEMS = [LOGIN_ITEM.id, ...SIDEBAR_ITEMS.filter((item) => item.locked).map((item) => item.id)];
+export const LOCKED_ITEMS = SIDEBAR_ITEMS.filter((item) => item.locked).map((item) => item.id);
 
 function groupItems(items: SidebarItem[]): SidebarItem[][] {
   const blocks: SidebarItem[][] = [];

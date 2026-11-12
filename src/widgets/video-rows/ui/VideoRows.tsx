@@ -21,6 +21,7 @@ interface Props {
   onLoadMore?: (rowId: string) => void;
   onLeftEdge?: () => void;
   onTopEdge?: () => void;
+  wrap?: boolean;
   enabled?: boolean;
 }
 
@@ -29,6 +30,7 @@ const ROWS_AFTER = 2;
 const BUFFER_CARDS = 3;
 const ROW_TOP = 24;
 const SETTLE_MS = 2500;
+const WRAP_PAUSE_MS = 300;
 
 function Skeleton({ count, width, height }: { count: number; width: number; height: number }) {
   const cells = [];
@@ -95,7 +97,7 @@ const RowView = memo(function RowView({ entry, selected, scroll, active, top, ro
   );
 });
 
-export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge, onTopEdge, enabled = true }: Props) {
+export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge, onTopEdge, wrap = false, enabled = true }: Props) {
   const nav = useNav<Video>();
   const [tileScale] = useSetting('tileScale');
   const [textScale] = useSetting('textScale');
@@ -108,7 +110,10 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
   const viewportCards = Math.ceil((window.innerWidth - SIDEBAR_WIDTH) / step) + 1;
 
   const present = useMemo(() => rows.filter((row) => row.videos.length > 0 || row.status === 'idle' || row.status === 'loading'), [rows]);
-  const activeRow = Math.max(0, present.findIndex((candidate) => candidate.id === activeId));
+  const lastRow = useRef(0);
+  const found = present.findIndex((candidate) => candidate.id === activeId);
+  const activeRow = found >= 0 ? found : Math.min(lastRow.current, Math.max(0, present.length - 1));
+  lastRow.current = activeRow;
   const row = present[activeRow];
   const setActiveRow = (at: number) => setActiveId(present[at].id);
   const rowIndex = row ? Math.min(indexes[row.id] || 0, Math.max(0, row.videos.length - 1)) : 0;
@@ -136,10 +141,12 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
     if (row && row.hasMore && row.videos.length - rowIndex <= 5) onLoadMore?.(row.id);
   }, [row, rowIndex, onLoadMore]);
 
-  const moveRow = (direction: number) => {
-    let next = activeRow + direction;
-    while (next >= 0 && next < present.length && present[next].videos.length === 0) next += direction;
+  // Going on at an end only wraps round after a pause, so a held key or a long scroll of the wheel stops there
+  const lastStep = useRef(0);
+  const moveRow = (direction: number, fresh: boolean) => {
+    const next = activeRow + direction;
     if (next >= 0 && next < present.length) setActiveRow(next);
+    else if (wrap && fresh && present.length > 1) setActiveRow(direction > 0 ? 0 : present.length - 1);
     else if (direction < 0) onTopEdge?.();
   };
 
@@ -174,8 +181,14 @@ export function VideoRows({ stateKey, rows, onActiveRow, onLoadMore, onLeftEdge,
     if (!row) return false;
     if (!settled) setSettled(true);
     switch (event.keyCode) {
-      case KEY.UP: moveRow(-1); return true;
-      case KEY.DOWN: moveRow(1); return true;
+      case KEY.UP:
+      case KEY.DOWN: {
+        const now = Date.now();
+        const fresh = !event.repeat && now - lastStep.current >= WRAP_PAUSE_MS;
+        lastStep.current = now;
+        moveRow(event.keyCode === KEY.UP ? -1 : 1, fresh);
+        return true;
+      }
       case KEY.LEFT:
         if (rowIndex === 0) (onLeftEdge ?? nav.focusSidebar)();
         else setColumn(row.id, rowIndex - 1);

@@ -37,6 +37,7 @@ const playlistFailed = new Set<string>();
 const RETRY_COOLDOWN_MS = 5000;
 const TOAST_MS = 3000;
 const AUTOPLAY_SECONDS = 5;
+const CONTROL_ZONES = '.pbtn, .timeline, .picker, .player__upNext, .playerStats';
 const MEDIA_ERR_DECODE = 3;
 const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
 // Chrome reports an HTTP refusal of the stream, such as a 429, like this (other engines give no message), a real codec problem names the demuxer or pipeline instead
@@ -86,6 +87,7 @@ export function Player({ video, queue, onClose, onPlayNext, onOpenChannel, onSta
   const [waiting, setWaiting] = useState(false);
   const [source, setSource] = useState<{ kind: 'hls' | 'file'; url: string } | null>(null);
   const refusals = useRef(0);
+  const pressStart = useRef<EventTarget | null>(null);
   const loadedAt = useRef(0);
   const started = useRef(false);
   const reloads = useRef(0);
@@ -487,8 +489,18 @@ export function Player({ video, queue, onClose, onPlayNext, onOpenChannel, onSta
   const inWatchLater = lists.watchLater.some((entry) => entry.id === video.id);
   const inFavorites = lists.favorites.some((entry) => entry.id === video.id);
 
+  const onSurface = (target: EventTarget | null) => !(target as Element | null)?.closest(CONTROL_ZONES);
+  const surfaceDown = (event: React.MouseEvent) => { pressStart.current = event.target; };
+  const surfaceClick = (event: React.MouseEvent) => {
+    const started = pressStart.current;
+    pressStart.current = null;
+    if (!onSurface(event.target) || (started !== null && !onSurface(started)) || waiting || countdown !== null) return;
+    if (error) retry();
+    else togglePlay();
+  };
+
   return (
-    <div className="player" onMouseMove={reveal}>
+    <div className="player" onMouseMove={reveal} onMouseDown={surfaceDown} onClick={surfaceClick}>
       <video ref={videoRef} className="player__video" style={{ objectFit: aspectOf(aspect).objectFit }} playsInline autoPlay />
       {buffering && !error && <div className="player__buffering"><Spinner scale={0.6} /></div>}
       {toast && <div className="player__toast">{toast}</div>}

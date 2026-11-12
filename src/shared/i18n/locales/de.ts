@@ -199,7 +199,7 @@ export default {
   "Loading Animation": "Ladeanimation",
   "Shown whenever a page or the player is loading. The ring is the lightest on older TVs": "Wird gezeigt, wenn eine Seite oder der Player lädt. Der Ring ist auf älteren Fernsehern am leichtesten",
   "Logo Button": "Logo-Taste",
-  "The Odysee logo can be the button for Home or for Settings. It then replaces that entry in the menu, so it is never both": "Das Odysee-Logo kann die Taste für Start oder für Einstellungen sein. Es ersetzt dann diesen Eintrag im Menü, ist also nie beides",
+  "Home or Settings turns the logo into that button and takes the entry out of the menu. Login shows who is signed in": "Start oder Einstellungen machen das Logo zu dieser Taste und nehmen den Eintrag aus dem Menü. Anmelden zeigt, wer angemeldet ist",
   "Back Button": "Zurück-Taste",
   "Shows a back arrow at the top left of the player controls. The Back key of the remote works either way": "Zeigt oben links in den Player-Steuerelementen einen Zurück-Pfeil. Die Zurück-Taste der Fernbedienung funktioniert in beiden Fällen",
   "Twin Arcs": "Zwei Bögen",

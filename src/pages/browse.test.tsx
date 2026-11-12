@@ -352,6 +352,32 @@ describe('Home customization', () => {
     expect(spy.mock.calls.some(([, init]) => String((init as RequestInit | undefined)?.body).includes('g1'))).toBe(false);
   });
 
+  it('adds Wild West, which has no channels of its own, as the last row only once it is shown', async () => {
+    const withWildWest = { ...content, data: { en: { categories: {
+      ...content.data.en.categories,
+      WILD_WEST: { label: 'Wild West', icon: 'WildWest', sortOrder: 999, channelLimit: '1', excludedChannelIds: ['x1', 'x2'], pageSize: 6 },
+    } } } };
+    const spy = api({ homepage: withWildWest as never });
+    const view = renderWithNav(<Home />);
+    await act(async () => { await refreshHomepage(true); });
+    await screen.findByText('Tech');
+    expect(titles()).toEqual(['Featured', 'Gaming', 'Tech']);
+    const asked = () => spy.mock.calls
+      .map(([, init]) => (init?.body ? JSON.parse(String(init.body)) : {}))
+      .filter((body) => body.method === 'claim_search' && body.params.not_channel_ids);
+    expect(asked()).toHaveLength(0);
+    view.unmount();
+    toggleEntry('home', 'WILD_WEST', true);
+    renderWithNav(<Home />);
+    await screen.findByText('Featured');
+    press(40); press(40); press(40);
+    await screen.findByText('Wild West');
+    expect(titles().map((title) => title?.trim())).toEqual(['Tech', 'Wild West']);
+    expect(await screen.findByText('all video 1-0', {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(asked()[0].params).toMatchObject({ not_channel_ids: ['x1', 'x2'], limit_claims_per_channel: 1 });
+    expect(asked()[0].params).not.toHaveProperty('channel_ids');
+  });
+
   it('shows rows in the order the user picked', async () => {
     api();
     moveEntry('home', ['continue', 'following', 'PRIMARY_CONTENT', 'GAMING', 'TECH'], 'TECH', -1);

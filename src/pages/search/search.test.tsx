@@ -199,6 +199,23 @@ describe('search filters', () => {
     await screen.findByText('Result y1');
   });
 
+  it('closes the whole filter menu with a click outside it, from the list and from a choice', async () => {
+    setup();
+    typeInto('fixture');
+    await screen.findByText('Result y1', {}, { timeout: 3000 });
+    press(39);
+    press(13);
+    expect(screen.getByText('Filters', { selector: 'h2' })).toBeInTheDocument();
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(document.querySelector('.picker')).toBeNull();
+    press(13);
+    press(13);
+    expect(screen.getByText('Sort by', { selector: 'h2' })).toBeInTheDocument();
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(document.querySelector('.picker')).toBeNull();
+    expect(button()?.className).not.toContain('--on');
+  });
+
   it('chooses the other filters, goes back from a choice, and resets them', async () => {
     const { spy } = setup();
     typeInto('fixture');

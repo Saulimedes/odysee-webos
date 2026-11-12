@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hoverOver } from '../../../tests/render';
 import { LayoutEditor, visibleItems, type LayoutEntry } from '.';
-import { arrange, moveEntry, resetLayout, toggleEntry } from './model/layout';
+import { arrange, isHidden, moveEntry, resetLayout, toggleEntry } from './model/layout';
 
 const press = (keyCode: number) => { fireEvent.keyDown(window, { keyCode }); if (keyCode === 13) fireEvent.keyUp(window, { keyCode }); };
 const ids = (items: { id: string }[]) => items.map((item) => item.id);
@@ -17,29 +17,53 @@ beforeEach(() => {
 
 describe('arrange and visibleItems', () => {
   it('keeps the original order without a layout', () => {
-    expect(ids(arrange(items, { order: [], hidden: [] }))).toEqual(['a', 'b', 'c', 'd']);
+    expect(ids(arrange(items, { order: [], hidden: [], shown: [] }))).toEqual(['a', 'b', 'c', 'd']);
   });
 
   it('puts known ids first in their order and appends unknown ones in the original order', () => {
-    expect(ids(arrange(items, { order: ['c', 'a', 'gone'], hidden: [] }))).toEqual(['c', 'a', 'b', 'd']);
+    expect(ids(arrange(items, { order: ['c', 'a', 'gone'], hidden: [], shown: [] }))).toEqual(['c', 'a', 'b', 'd']);
   });
 
   it('drops hidden items but never locked ones', () => {
-    const layout = { order: [], hidden: ['b', 'c'] };
+    const layout = { order: [], hidden: ['b', 'c'], shown: [] };
     expect(ids(visibleItems(items, layout))).toEqual(['a', 'd']);
     expect(ids(visibleItems(items, layout, ['c']))).toEqual(['a', 'c', 'd']);
+  });
+
+  it('keeps the entries that are hidden by default away until the user shows them', () => {
+    const entries = [{ id: 'a' }, { id: 'open', hiddenByDefault: true }, { id: 'b' }];
+    const layout = { order: [], hidden: [], shown: [] };
+    expect(ids(visibleItems(entries, layout))).toEqual(['a', 'b']);
+    expect(ids(visibleItems(entries, { ...layout, shown: ['open'] }))).toEqual(['a', 'open', 'b']);
+    expect(ids(visibleItems(entries, { ...layout, hidden: ['open'] }))).toEqual(['a', 'b']);
+    expect(ids(visibleItems(entries, { ...layout, hidden: ['a'], shown: ['open'] }))).toEqual(['open', 'b']);
+    expect(isHidden(entries[1], layout)).toBe(true);
+    expect(isHidden(entries[1], { ...layout, shown: ['open'] })).toBe(false);
+    expect(isHidden(entries[0], { ...layout, hidden: ['a'] })).toBe(true);
   });
 });
 
 describe('layout storage', () => {
   it('saves moves and hidden items and removes the key on reset', () => {
     expect(moveEntry('home', ['a', 'b', 'c'], 'a', 1)).toBe(true);
-    expect(stored('layout_home')).toEqual({ order: ['b', 'a', 'c'], hidden: [] });
+    expect(stored('layout_home')).toEqual({ order: ['b', 'a', 'c'], hidden: [], shown: [] });
     toggleEntry('home', 'c');
     expect(stored('layout_home').hidden).toEqual(['c']);
     toggleEntry('home', 'c');
     expect(stored('layout_home').hidden).toEqual([]);
     expect(stored('layout_sidebar')).toBeNull();
+    resetLayout('home');
+    expect(localStorage.getItem('layout_home')).toBeNull();
+  });
+
+  it('saves the entries that are shown against their default apart, and forgets them on reset', () => {
+    toggleEntry('home', 'open', true);
+    expect(stored('layout_home')).toEqual({ order: [], hidden: [], shown: ['open'] });
+    toggleEntry('home', 'open', true);
+    expect(localStorage.getItem('layout_home')).toBeNull();
+    toggleEntry('home', 'open', true);
+    toggleEntry('home', 'b');
+    expect(stored('layout_home')).toEqual({ order: [], hidden: ['b'], shown: ['open'] });
     resetLayout('home');
     expect(localStorage.getItem('layout_home')).toBeNull();
   });
@@ -56,15 +80,22 @@ describe('layout storage', () => {
     localStorage.setItem('layout_sidebar', '"garbage"');
     vi.resetModules();
     const module = await import('./model/layout');
-    expect(render(<Probe kind="home" module={module} />).container.textContent).toBe('{"order":["x","y"],"hidden":[]}');
-    expect(render(<Probe kind="sidebar" module={module} />).container.textContent).toBe('{"order":[],"hidden":[]}');
+    expect(render(<Probe kind="home" module={module} />).container.textContent).toBe('{"order":["x","y"],"hidden":[],"shown":[]}');
+    expect(render(<Probe kind="sidebar" module={module} />).container.textContent).toBe('{"order":[],"hidden":[],"shown":[]}');
+  });
+
+  it('reads a layout that was saved before entries could be shown', async () => {
+    localStorage.setItem('layout_home', JSON.stringify({ order: ['x'], hidden: ['y'] }));
+    vi.resetModules();
+    const module = await import('./model/layout');
+    expect(render(<Probe kind="home" module={module} />).container.textContent).toBe('{"order":["x"],"hidden":["y"],"shown":[]}');
   });
 
   it('survives unreadable storage', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
     vi.resetModules();
     const module = await import('./model/layout');
-    expect(render(<Probe kind="home" module={module} />).container.textContent).toBe('{"order":[],"hidden":[]}');
+    expect(render(<Probe kind="home" module={module} />).container.textContent).toBe('{"order":[],"hidden":[],"shown":[]}');
   });
 });
 
@@ -85,6 +116,16 @@ describe('LayoutEditor', () => {
   };
   const labels = () => Array.from(document.querySelectorAll('.layoutRow__label')).map((node) => node.firstChild?.textContent);
   const state = () => document.querySelector('.layoutRow--active')?.textContent;
+
+  it('closes with a click outside the panel and not with a click on it', () => {
+    const onClose = setup();
+    fireEvent.mouseDown(screen.getByText('Edit rows'));
+    fireEvent.click(screen.getByText('Edit rows'));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.mouseDown(document.querySelector('.picker') as HTMLElement);
+    fireEvent.click(document.querySelector('.picker') as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it('lists the entries with their state and a reset row', () => {
     setup();
@@ -107,6 +148,20 @@ describe('LayoutEditor', () => {
     press(13);
     expect(state()).toContain('Always shown');
     expect(stored('layout_home')?.hidden ?? []).toEqual([]);
+  });
+
+  it('lists an entry that is hidden by default as hidden, and shows it with OK', () => {
+    render(<LayoutEditor kind="home" title="Edit rows" entries={[{ id: 'a', label: 'Alpha' }, { id: 'open', label: 'Open', hiddenByDefault: true }]} onClose={vi.fn()} />);
+    press(40);
+    expect(state()).toContain('Hidden');
+    expect(document.querySelector('.layoutRow--hidden')).not.toBeNull();
+    press(13);
+    expect(state()).toContain('Shown');
+    expect(document.querySelector('.layoutRow--hidden')).toBeNull();
+    expect(stored('layout_home')).toEqual({ order: [], hidden: [], shown: ['open'] });
+    press(13);
+    expect(state()).toContain('Hidden');
+    expect(localStorage.getItem('layout_home')).toBeNull();
   });
 
   it('picks a row up, moves it and drops it again', () => {

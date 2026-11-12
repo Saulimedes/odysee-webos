@@ -79,12 +79,31 @@ async function main() {
     assert.ok(Math.abs(middle - bar.height / 2) < 40, `menu entries are centered, middle at ${middle} of ${bar.height}`);
     assert.ok(bar.brand.bottom < bar.first.top, 'logo is above the entries');
     assert.ok(bar.settings.top > bar.last.bottom && bar.height - bar.settings.bottom < 60, 'Settings is at the bottom');
+    assert.deepEqual(await page.$$eval('.sidebar__label', (nodes) => nodes.map((node) => node.textContent)), ['Odysee', 'Search', 'Home', 'Discover', 'Featured', 'Categories', 'Library', 'Settings'], 'the menu of a guest has no Login entry');
     const titles = () => page.$$eval('.videoRow__title', (nodes) => nodes.map((node) => node.textContent));
     assert.deepEqual((await titles()).slice(0, 2), ['Featured', 'Gaming']);
 
     await press(page, 'ArrowRight');
     assert.equal(await page.$eval('.card--active .card__title', (node) => node.textContent), 'Trending video 1-1');
     await press(page, 'ArrowDown');
+    assert.equal(await page.$eval('.card--active .card__title', (node) => node.textContent), 'Trending video 1-0');
+
+    const homeRow = () => page.$eval('.videoRow--active .videoRow__title', (node) => node.textContent.trim());
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    await press(page, 'ArrowDown');
+    assert.equal(await homeRow(), 'Tech');
+    await press(page, 'ArrowDown');
+    assert.equal(await homeRow(), 'Tech', 'a quick second press stays at the last row');
+    await pause(450);
+    await press(page, 'ArrowDown');
+    assert.equal(await homeRow(), 'Featured', 'Down again after a pause jumps from the last row to the first');
+    await press(page, 'ArrowUp');
+    assert.equal(await homeRow(), 'Featured', 'a quick second press stays at the first row');
+    await pause(450);
+    await press(page, 'ArrowUp');
+    assert.equal(await homeRow(), 'Tech', 'Up again after a pause jumps from the first row to the last');
+    await press(page, 'ArrowUp');
+    assert.equal(await homeRow(), 'Gaming');
     assert.equal(await page.$eval('.card--active .card__title', (node) => node.textContent), 'Trending video 1-0');
 
     const menuEntries = () => page.$$eval('.picker .pickerItem', (nodes) => nodes.map((node) => node.textContent));
@@ -137,6 +156,11 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector('video.player__video').paused, { timeout: 10000 });
     await page.waitForFunction((from) => document.querySelector('video.player__video').currentTime > from, { timeout: 10000 }, stopped);
     assert.ok(Math.abs((await clock()) - stopped) < 8, 'play continues where the video was paused');
+
+    await page.mouse.click(960, 420);
+    await page.waitForFunction(() => document.querySelector('video.player__video').paused, { timeout: 5000 });
+    await page.mouse.click(960, 420);
+    await page.waitForFunction(() => !document.querySelector('video.player__video').paused, { timeout: 10000 });
 
     await page.mouse.move(300, 300);
     await page.waitForSelector('.player__controls--visible');
@@ -218,6 +242,54 @@ async function main() {
     assert.notEqual(loaders.arcColor, 'rgba(0, 0, 0, 0)', 'arcs are drawn in the accent color');
     await press(page, 'Escape');
     await page.waitForFunction(() => !document.querySelector('.picker'));
+    await press(page, 'Enter');
+    await page.waitForSelector('.picker');
+    await page.mouse.click(120, 540);
+    await page.waitForFunction(() => !document.querySelector('.picker'), { timeout: 5000 });
+    assert.equal(await page.$eval('.row--active .row__label', (node) => node.textContent), 'Loading Animation', 'a click outside the picker closes it');
+
+    await press(page, 'ArrowLeft');
+    await press(page, 'ArrowDown', 4);
+    await page.waitForFunction(() => document.querySelector('.masterDetail__detail h2.masterDetail__title').textContent === 'Account');
+    await press(page, 'ArrowRight');
+    assert.deepEqual(await page.$$eval('.masterDetail__detail .row__section', (nodes) => nodes.map((node) => node.textContent)), ['Login', 'Content', 'Storage'], 'Login is above Content and Storage');
+    assert.equal(await page.$eval('.row--active .row__label', (node) => node.textContent), 'Sign in to Odysee');
+    await press(page, 'Enter');
+    await page.waitForSelector('.loginPage');
+    assert.equal(await page.$eval('.loginPage h1', (node) => node.textContent), 'Sign in to Odysee', 'the Login row opens the login screen');
+    assert.equal(await page.$eval('.sidebar__item--selected .sidebar__label', (node) => node.textContent), 'Settings', 'the menu keeps Settings marked on the login screen');
+    await press(page, 'Escape');
+    await page.waitForSelector('.masterDetail__detail .row');
+    assert.equal(await page.$eval('.row--active .row__label', (node) => node.textContent), 'Sign in to Odysee', 'Back returns to the Login row');
+
+    await press(page, 'ArrowLeft');
+    await press(page, 'ArrowUp', 3);
+    await page.waitForFunction(() => document.querySelector('.masterDetail__detail h2.masterDetail__title').textContent === 'Customize');
+    await press(page, 'ArrowRight');
+    await press(page, 'Enter');
+    await page.waitForSelector('.layoutEditor');
+    const wildWest = () => page.$$eval('.layoutRow', (nodes) => { const row = nodes.find((node) => node.querySelector('.layoutRow__label').firstChild.textContent === 'Wild West'); return row && { state: row.querySelector('.layoutRow__state').textContent.trim(), hidden: row.className.indexOf('layoutRow--hidden') >= 0 }; });
+    assert.deepEqual(await wildWest(), { state: 'Hidden', hidden: true }, 'the homepage editor lists Wild West, which is hidden until you show it');
+    await press(page, 'ArrowDown', 5);
+    assert.equal(await page.$eval('.layoutRow--active .layoutRow__label', (node) => node.firstChild.textContent), 'Wild West');
+    await press(page, 'Enter');
+    assert.deepEqual(await wildWest(), { state: 'Shown', hidden: false });
+    await press(page, 'Enter');
+    assert.deepEqual(await wildWest(), { state: 'Hidden', hidden: true });
+    await press(page, 'Escape');
+    await page.waitForFunction(() => !document.querySelector('.layoutEditor'));
+    await press(page, 'ArrowDown', 2);
+    assert.equal(await page.$eval('.row--active .row__label', (node) => node.textContent), 'Logo Button');
+    await press(page, 'Enter');
+    await page.waitForSelector('.picker');
+    assert.deepEqual(await page.$$eval('.picker .pickerItem', (nodes) => nodes.map((node) => node.textContent.replace('current', ''))), ['Off', 'Home', 'Settings', 'Login']);
+    const brand = () => page.$eval('.sidebar__brand', (node) => ({ button: node.className.indexOf('sidebar__brand--entry') >= 0, name: node.textContent }));
+    assert.deepEqual(await brand(), { button: false, name: 'Odysee' }, 'the logo is only a picture while the logo button is off');
+    await press(page, 'ArrowDown', 3);
+    assert.deepEqual(await brand(), { button: true, name: 'Odysee' }, 'the logo is the login button for a guest, without the name of an entry');
+    await press(page, 'Escape');
+    await page.waitForFunction(() => !document.querySelector('.picker'));
+    assert.deepEqual(await brand(), { button: false, name: 'Odysee' }, 'Back puts the logo button back');
 
     await page.evaluate(() => Array.from(document.querySelectorAll('.sidebar__item')).find((node) => node.textContent.includes('Categories')).click());
     await page.waitForSelector('.masterDetail .entry');
@@ -230,11 +302,12 @@ async function main() {
     await press(page, 'Escape');
     await page.waitForFunction(() => !document.querySelector('.masterDetail--collapsed'));
 
-    await page.evaluate(() => localStorage.setItem('uiLanguage', '"de"'));
+    await page.evaluate(() => { localStorage.setItem('uiLanguage', '"de"'); localStorage.setItem('logoButton', '"home"'); });
     await page.reload();
     await page.waitForFunction(() => !document.getElementById('boot'));
     assert.equal(await page.evaluate(() => document.documentElement.lang), 'de');
     assert.ok((await page.$$eval('.sidebar__label', (nodes) => nodes.map((node) => node.textContent))).includes('Einstellungen'), 'the menu is in German');
+    assert.equal(await page.$eval('.sidebar__brand--entry', (node) => node.textContent), 'Odysee', 'the logo keeps its name when it is the button for Home');
 
     await page.waitForSelector('.videoRow .card');
     await press(page, 'Enter');
