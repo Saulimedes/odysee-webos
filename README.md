@@ -23,7 +23,6 @@ Unofficial Odysee client for LG webOS TVs.
 
 Needs webOS 5 or newer.
 
-- **[Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel):** Install and update Odysee from the app list on the TV.
 - **[Device Manager](https://github.com/webosbrew/dev-manager-desktop):** Install the `.ipk` from the [Releases](https://github.com/Saulimedes/odysee-webos/releases) page.
 - **Command line:** Build and deploy it yourself, see [Deploy to the TV](#deploy-to-the-tv).
 
