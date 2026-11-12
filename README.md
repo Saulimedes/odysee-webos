@@ -12,11 +12,10 @@ Unofficial Odysee client for LG webOS TVs.
 
 ## Features
 
-- Home like on Odysee, with Continue Watching and one row per category.
-- Search with filters, Categories, channels, Library, Playlists and Following. Sign in to sync Watch Later, Favorites and Following.
-- Hold OK on a video to save it, remove it from your lists or open its channel.
-- Player with aspect ratio, speed and Stats for Nerds. Autoplay goes on with the next video of the list you started from, or a related one.
-- Plays the transcoded stream that Odysee makes of a video, like odysee.com does, and the original file when there is none or the server will not hand it out.
+- Home like on Odysee, with Continue Watching and a row per category.
+- Search, Categories, channels, Library, Playlists and Following. Sign in to sync Watch Later, Favorites and Following.
+- Hold OK on a video to save it, remove it or open its channel.
+- Player with aspect ratio, speed, Stats for Nerds and autoplay of the next video.
 - Themes, fonts and sizes, a customizable homepage and menu, 9 languages.
 - Made for the TV remote, the Magic Remote pointer works too.
 
